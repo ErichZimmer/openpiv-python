@@ -12,10 +12,11 @@ def _correlate_images(
     subtract_mean: bool=True,
 ) -> np.ndarray:
     # Equation 5; correlation of undistorted images
-    image_a = np.asarray(image_a, dtype=float)
-    image_b = np.asarray(image_b, dtype=float)
+    image_a = np.asarray(image_a, dtype=np.float64)
+    image_b = np.asarray(image_b, dtype=np.float64)
 
     if subtract_mean:
+        divisor = image_a.size * np.std(image_a) * np.std(image_b)
         image_a = image_a - image_a.mean()
         image_b = image_b - image_b.mean()
 
@@ -24,9 +25,15 @@ def _correlate_images(
         image_b[np.newaxis],
         correlation_method=method,
         normalized_correlation=False,
-    )
+    )[0]
 
-    return corr[0]
+    if subtract_mean:
+        if divisor > 0:
+            corr /= divisor
+        else:
+            corr[:] = 0.0
+
+    return corr
 
 
 def _get_lag_axes(shape: tuple) -> tuple[np.ndarray, np.ndarray]:

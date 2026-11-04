@@ -111,7 +111,8 @@ def fix_disparity(
         image_points_proj += offset[:, None]
 
         if not np.all(np.isfinite(image_points_proj)):
-            raise ValueError('Camera projections must contain only finite values')
+            msg = 'Camera projections must contain only finite values'
+            raise ValueError(msg)
 
         image_points.append(image_points_proj)
 
