@@ -348,7 +348,7 @@ def multi_line_intersect(
     finding a least squares solution by iteratively updating each point until
     a specified amount of iterations have been completed. The least squares
     solution is performed via SVD, making it robust to noise and artifacts.
-    This is necessary since the intitial particle positions are approximated
+    This is necessary since the initial particle positions are approximated
     using the calibrated backward rays.
 
     Parameters
@@ -356,14 +356,14 @@ def multi_line_intersect(
     cameras : list
         A list of instances of polynomial cameras.
     img_points : list
-        A list of image coordinates for each canera structure.
+        A list of image coordinates for each camera structure.
     iterations : int, optional
-        The number of Gauss-Newton iterations each object point recieves.
+        The number of Gauss-Newton iterations each object point receives.
 
     Returns
     -------
     coords : np.ndarray
-        The world coordinate that mininmize all projection residuals.
+        The world coordinate that minimizes all projection residuals.
 
     References
     ----------

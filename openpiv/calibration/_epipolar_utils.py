@@ -26,7 +26,7 @@ def plot_epipolar_line(
 
     Using the passed camera structure and projection function, plot the 3D
     epipolar line(s). By passing ax, multiple epipolar lines can be plotted
-    as a visualization aid for camera alighnment and multi-camera system
+    as a visualization aid for camera alignment and multi-camera system
     performance.
 
     Parameters
@@ -48,7 +48,7 @@ def plot_epipolar_line(
 
     Notes
     -----
-    This function is based on a similar utilitiy in MyPTV, which is referenced below.
+    This function is based on a similar utility in MyPTV, which is referenced below.
     https://github.com/ronshnapp/MyPTV
 
     """
@@ -113,7 +113,7 @@ def _line_intersect(
     coords : np.ndarray
         The world coordinate that is nearest to the two rays intersecting.
     dist : float
-        The minimum dinstance between the two rays.
+        The minimum distance between the two rays.
 
     Notes
     -----

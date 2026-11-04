@@ -133,7 +133,7 @@ def _undistort_points_poly(
     like such: coeff = [1, x, y, x**2, y**2, x*y]. This effectively allows
     any distortion in the x and y axes to be compensated. However, the
     polynomial model is not stable when extrapolating, so beware of
-    artifcacts.
+    artifacts.
 
     References
     ----------
@@ -208,11 +208,11 @@ def _distort_points_poly(
     like such: coeff = [x, y, x**2, y**2, x*y]. This effectively allows
     any distortion in the x and y axes to be compensated. However, the
     polynomial model is not stable when extrapolating, so beware of
-    artifcacts.
+    artifacts.
 
     To compute the inverse of the distortion model, we use compute the error
     term and add it to the normalized camera coordinated. This method does
-    not require further iterations for refiunement.
+    not require further iterations for refinement.
 
     References
     ----------

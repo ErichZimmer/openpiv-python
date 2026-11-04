@@ -125,9 +125,9 @@ def get_asymmetric_grid(
 
     Examples
     --------
-    >> from openpiv.calib_utils import get_sasymmetric_grid
+    >> from openpiv.calib_utils import get_asymmetric_grid
 
-    >>> object_points = get_sasymmetric_grid(
+    >>> object_points = get_asymmetric_grid(
         nx = 9,
         ny = 9,
         z = 0,

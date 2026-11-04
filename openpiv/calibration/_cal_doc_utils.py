@@ -23,7 +23,7 @@ _project_points_func = (
 
 _project_to_z_func = (
 """project_to_z_func : function
-    Projection function with the following signiture:
+    Projection function with the following signature:
     res = func(cam_struct, image_points, Z).""")
 
 _x_lab_coord = (

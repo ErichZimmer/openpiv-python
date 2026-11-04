@@ -25,7 +25,7 @@ def get_pairs_proj(
     cam : object
         An instance of a camera.
     proj_func : function
-        Projection function with the following signiture:
+        Projection function with the following signature:
         res = func(cam_struct, object_points).
     image_points : 2D np.ndarray
         2D np.ndarray of [x, y]` image coordinates.

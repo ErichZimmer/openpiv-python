@@ -15,7 +15,7 @@ coordinates are calculated as explained in readme pinhole camera model file.
 
 Functions
 =========
-    calibrate_intrinsics - Calculate the intrinsic parameters using Zang's algorithm
+    calibrate_intrinsics - Calculate the intrinsic parameters using Zhang's algorithm
     camera - Create an instance of a Pinhole camera model
     calibrate_dlt - Calibrate and return DLT coefficients and fitting error
     line_intersect - Using two lines, locate where those lines intersect

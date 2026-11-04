@@ -5,7 +5,7 @@ Polynomial Camera Model
 
 This module contains an implementation of a polynomial camera model. This
 model is implemented using 3rd order polynomials in the x and y axis and a
-2nd order polynomial along the z-axis. This model can handle a multiplitude
+2nd order polynomial along the z-axis. This model can handle a multitude
 of different distortions and is usually preferred if processing algorithms
 later on do not heavily utilize triangulation. Additionally, it is important
 that the calibration markers cover as much of the image(s) as possible to

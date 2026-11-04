@@ -106,7 +106,7 @@ def get_sheet_profile(
     at 30, 45, and 60 degrees, respectively. It should be mentioned, however,
     that this should not be considered a source of truth for light sheet
     characteristics. This utility is mostly to help analyze light sheet
-    profiles which are typically only recovred after volumetric PIV.
+    profiles which are typically only recovered after volumetric PIV.
 
     Examples
     --------

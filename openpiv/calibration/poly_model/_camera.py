@@ -14,7 +14,7 @@ class camera:
     """An instance of a polynomial camera model.
 
     Create an instance of a polynomial camera. The polynomial camera model
-    is based on the Soloff camera model where a polymial mapping function
+    is based on the Soloff camera model where a polynomial mapping function
     is created with third order polynomials in the x- and y-axis and a second
     order polynomial along the z-axis. The polynomial camera models also has
     ray-based estimator for 3D point triangulation.

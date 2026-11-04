@@ -225,7 +225,7 @@ def _project_to_z(
     """Project image points to world points.
 
     Project image points to world points at specified z-plane using a
-    closed form solution (when omiting distortion correction). This means
+    closed form solution (when omitting distortion correction). This means
     under ideal circumstances with no distortion, the forward project
     coordinates would be accurate down to machine precision or numerical
     round off errors.

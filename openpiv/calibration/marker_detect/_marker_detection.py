@@ -128,7 +128,7 @@ def _subpixel_approximation(
     pseudo inverse of a matrix and multiplying it to the logarithm of the 
     correlation matrix.
     
-    Paramters
+    Parameters
     ---------
     corr : np.ndarray
         A two dimensional array of marker response values of the shape (n, m).
@@ -151,8 +151,8 @@ def _subpixel_approximation(
     Notes
     -----
     This function may become a nxn Gaussian subpixel interpolator for large
-    cross correlation peaks (e.g., usign PIV on non-particle images). Hence,
-    this function is documented to remind someone about this possiblity.
+    cross correlation peaks (e.g., using PIV on non-particle images). Hence,
+    this function is documented to remind someone about this possibility.
 
     """
     new_pos_x = np.array(pos_x, dtype=np.float64, copy=True)

@@ -37,7 +37,7 @@ def line_intersect(
     coords : np.ndarray
         The world coordinate that is nearest to the two rays intersecting.
     dist : float
-        The minimum dinstance between the two rays.
+        The minimum distance between the two rays.
 
     """
     cam_1._check_parameters()
@@ -88,7 +88,7 @@ def multi_line_intersect(
     cameras : list
         A list of instances of Pinhole cameras.
     img_points : list
-        A list of image coordinates for each canera structure.
+        A list of image coordinates for each camera structure.
 
     Returns
     -------
