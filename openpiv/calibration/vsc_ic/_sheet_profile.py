@@ -99,13 +99,14 @@ def get_sheet_profile(
 
     Notes
     -----
-    The profiles follow section 3.3 of Wieneke (2018).
-    Profiles for sheets thinner than 2 mm may be less reliable at viewing
-    angles below 45 degrees from the sheet normal.
-    In synthetic tests with 50 recordings and a 0.5 mm sheet, the corrected
-    FWHM errors were about 26%, 9%, and 3% at 30, 45, and 60 degrees,
-    respectively.
-    The accuracy depends on the camera geometry and particle image size.
+    The profiles follow section 3.3 of Wieneke (2018). Profiles for sheets
+    thinner than 2 mm may be less reliable at viewing angles below 45
+    degrees from the sheet normal. In synthetic tests with 50 recordings
+    and a 0.5 mm sheet, the corrected FWHM errors were about 26%, 9%, and 3%
+    at 30, 45, and 60 degrees, respectively. It should be mentioned, however,
+    that this should not be considered a source of truth for light sheet
+    characteristics. This utility is mostly to help analyze light sheet
+    profiles which are typically only recovred after volumetric PIV.
 
     Examples
     --------
