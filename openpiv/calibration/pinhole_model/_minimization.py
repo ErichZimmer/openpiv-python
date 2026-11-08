@@ -1,40 +1,14 @@
+from copy import deepcopy
+
 import numpy as np
-from scipy.optimize import least_squares
 
 from .. import _cal_doc_utils
-
-
-def _refine_func(
-    parameters: np.ndarray,
-    camera,
-    object_points: np.ndarray,
-    image_points: np.ndarray,
-    correct_focal: bool,
-    correct_distortion: bool
-):
-    camera.translation = parameters[0:3]
-    camera.orientation = parameters[3:6]
-    camera.principal = parameters[6:8]
-
-    offset = 8
-
-    if correct_focal:
-        camera.focal = parameters[offset:offset + 2]
-        offset += 2
-
-    if correct_distortion:
-        if camera.distortion_model.lower() == "brown":
-            camera.distortion1 = parameters[offset:offset + 8]
-        else:
-            camera.distortion2 = parameters[offset:offset + 10].reshape(
-                (2, 5)
-            )
-
-    camera._get_rotation_matrix()
-
-    projected_points = camera.project_points(object_points)
-
-    return (projected_points - image_points).T.ravel()
+from ._optimization import (
+    _camera_columns,
+    _camera_vector,
+    _levenberg_marquardt,
+    _set_camera_vector,
+)
 
 
 @_cal_doc_utils.docfiller
@@ -42,29 +16,25 @@ def _minimize_params(
     self,
     object_points: list,
     image_points: list,
-    correct_focal: bool = False,
-    correct_distortion: bool = False,
-    max_iter: int = 1000,
-    iterations: int = 3
+    correct_focal: bool=False,
+    correct_distortion: bool=False,
+    max_iter: int=1000,
+    iterations: int=3
 ):
-    """Refine pinhole camera parameters using Levenberg-Marquardt.
-
-    Minimize image reprojection residuals using a two-point numerical
-    Jacobian. Translation, orientation, and principal point are always
-    refined. Focal lengths and distortion coefficients are optionally
-    refined.
+    """Refine pinhole camera parameters using NumPy Levenberg-Marquardt.
 
     Parameters
     ----------
     %(object_points)s
     %(image_points)s
     correct_focal : bool, optional
-        If True, refine both focal lengths. Default is False.
+        Refine both focal lengths. Default is False.
     correct_distortion : bool, optional
-        If True, refine coefficients of the selected distortion model.
-        Otherwise, keep the existing coefficients fixed. Default is False.
+        Include distortion in projection and refine the enabled Brown and
+        tilt coefficients. When False, fit an ideal pinhole projection,
+        ignoring the stored distortion coefficients. Default is False.
     max_iter : int, optional
-        Maximum function evaluations per refinement pass. Default is 1000.
+        Maximum LM steps per refinement pass. Default is 1000.
     iterations : int, optional
         Number of successive refinement passes. Default is 3.
 
@@ -72,68 +42,126 @@ def _minimize_params(
     -------
     None
         The camera parameters are updated in place.
+
+    Raises
+    ------
+    ValueError
+        If camera parameters are invalid, object points do not have shape
+        (3, N), image points do not have matching shape (2, N), or too few
+        calibration points are supplied.
+    RuntimeError
+        If a Levenberg-Marquardt refinement pass fails.
+
     """
     self._check_parameters()
 
-    object_points = np.array(object_points, dtype=self.dtype)
-    image_points = np.array(image_points, dtype=self.dtype)
+    object_points = np.array(object_points, dtype=np.float64)
+    image_points = np.array(image_points, dtype=np.float64)
 
-    if object_points.shape[1] != image_points.shape[1]:
+    if object_points.ndim != 2 or object_points.shape[0] != 3:
+        raise ValueError('Object points must have shape (3, N)')
+
+    if image_points.shape != (2, object_points.shape[1]):
         raise ValueError('Object point image point size mismatch')
 
-    # Pack only parameters that will be refined.
-    parameters = [
-        self.translation,
-        self.orientation,
-        self.principal
-    ]
-
-    if correct_focal:
-        parameters.append(self.focal)
-
-    if correct_distortion:
-        if self.distortion_model.lower() == "brown":
-            parameters.append(self.distortion1)
-        else:
-            parameters.append(self.distortion2.ravel())
-
-    params_to_minimize = np.hstack(parameters)
-
-    # Retain the existing nine-point minimum while ensuring that LM
-    # has at least as many scalar residuals as free parameters.
-    min_points = max(
-        9,
-        (params_to_minimize.size + 1) // 2
+    columns = _camera_columns(
+        self,
+        correct_focal=correct_focal,
+        correct_distortion=correct_distortion
     )
+    n_parameters = len(columns)
+    min_points = max(9, (n_parameters + 1) // 2)
 
     if object_points.shape[1] < min_points:
         msg = f'Too few points to calibrate. Need at least {min_points} points'
         raise ValueError(msg)
 
-    args = (
-        self,
-        object_points,
-        image_points,
-        correct_focal,
-        correct_distortion
-    )
-
-    for _ in range(iterations):
-        res = least_squares(
-            _refine_func,
-            x0=params_to_minimize,
-            args=args,
-            method="lm",
-            jac="2-point",
-            x_scale="jac",
-            max_nfev=max_iter
+    def linearize(
+        cam
+    ):
+        projected, projection_jacobian, _ = cam.project_jacobian(
+            object_points,
+            correct_distortion=correct_distortion
         )
 
-        # Update the camera with the latest and most valid result
-        _refine_func(res.x, *args)
+        # Interleave x and y residuals in the same order as Jacobian rows.
+        residual = (projected - image_points).T
+        residual = residual.reshape(-1)
 
-        if not res.success:
-            raise RuntimeError(f'Pinhole refinement failed: {res.message}')
+        parameter_jacobian = projection_jacobian[:, :, columns]
+        parameter_jacobian = parameter_jacobian.reshape(-1, n_parameters)
 
-        # Continue subsequent passes from the returned solution.
-        params_to_minimize = res.x
+        cost = 0.5 * residual @ residual
+        camera_normal = parameter_jacobian.T @ parameter_jacobian
+        camera_gradient = parameter_jacobian.T @ residual
+
+        # The Schur LM expects board parameters, which do not exist
+        # for single-camera optimizations.
+        board_normal = np.zeros((0, 6, 6))
+        cross = np.zeros((0, n_parameters, 6))
+        board_gradient = np.zeros((0, 6))
+
+        return (
+            cost,
+            camera_normal,
+            board_normal,
+            cross,
+            camera_gradient,
+            board_gradient
+        )
+
+    def update(
+        cam,
+        camera_step: np.ndarray,
+        palceholder: np.ndarray
+    ):
+        trial = deepcopy(cam)
+        values = _camera_vector(trial)
+        values[columns] += camera_step
+
+        _set_camera_vector(
+            trial,
+            values
+        )
+
+        return trial
+
+    def evaluate(
+        cam
+    ):
+        if np.any(np.asarray(cam.focal) <= 0):
+            return np.inf
+
+        projected = cam.project_points(
+            object_points,
+            correct_distortion=correct_distortion
+        )
+        residual = projected - image_points
+        cost = 0.5 * np.sum(residual**2)
+
+        return cost
+
+    state = deepcopy(self)
+    state.dtype = np.dtype(np.float64)
+
+    for _ in range(iterations):
+        # TODO: Adapt the Schur LM optimizer for single cameras and multiple cameras
+        state, result = _levenberg_marquardt(
+            state,
+            linearize,
+            update,
+            evaluate,
+            max_iter=max_iter
+        )
+
+        if not result['success']:
+            msg = f"Pinhole refinement failed: {result['message']}"
+            raise RuntimeError(msg)
+
+    fitted_values = _camera_vector(state)
+    fitted_values = fitted_values.astype(self.dtype)
+
+    _set_camera_vector(
+        self,
+        fitted_values
+    )

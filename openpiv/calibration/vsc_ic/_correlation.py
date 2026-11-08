@@ -17,6 +17,7 @@ def _correlate_images(
 
     if subtract_mean:
         divisor = image_a.size * np.std(image_a) * np.std(image_b)
+        
         image_a = image_a - image_a.mean()
         image_b = image_b - image_b.mean()
 

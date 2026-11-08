@@ -16,23 +16,19 @@ def _check_parameters(self):
         msg = 'Orientation must be a three element 1D numpy ndarray'
         raise ValueError(msg)
 
-    if self.distortion_model.lower() not in ['brown', 'polynomial']:
-        msg = 'Distortion model must be either "brown" or "polynomial", not ' +\
-             f'{self.distortion_model}'
-        raise ValueError(msg)
-
     if self.distortion1.shape != (8,):
         msg = 'Radial and tangential distortion coefficients must be ' +\
               'an 8 element 1D numpy ndarray'
         raise ValueError(msg)
 
-    if not isinstance(self.distortion2, np.ndarray):
-        msg = 'Polynomial distortion coefficients must be a numpy ndarray'
-        raise ValueError(msg)
+    if self.distortion_model == 'reduced':
+        self.distortion1[4:6] = 0
 
-    if self.distortion2.shape != (2, 5):
-        msg = 'Polynomial distortion coefficients must be a 2x5 numpy ndarray'
-        raise ValueError(msg)
+    if not self.tilt:
+        self.distortion1[6:8] = 0
+        
+    if self.refraction != 'none':
+        raise ValueError('Refraction must be "none"')
 
     if not isinstance(self.focal, (tuple, list, np.ndarray)):
         raise ValueError('Focal point must be a tuple or list')

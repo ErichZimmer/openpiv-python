@@ -17,13 +17,16 @@ Functions
 =========
     calibrate_intrinsics - Calculate the intrinsic parameters using Zhang's algorithm
     camera - Create an instance of a Pinhole camera model
-    calibrate_dlt - Calibrate and return DLT coefficients and fitting error
+    calibrate_zhang - Initialize and refine planar-target calibration
+    bundle_adjust - Fit cameras and shared board poses with NumPy Schur LM
+    align_reference_plate - Align a fitted system with a reference capture
     line_intersect - Using two lines, locate where those lines intersect
     multi_line_intersect - Using multiple lines, approximate their intersection
 
 """
+from ._bundle_adjustment import *
 from ._camera import *
 from ._epipolar_geom import *
-from ._zang import *
+from ._zhang import *
 
 __all__ = [s for s in dir() if not s.startswith('_')]

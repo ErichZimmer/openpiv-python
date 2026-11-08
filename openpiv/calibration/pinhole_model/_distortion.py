@@ -1,54 +1,192 @@
 import numpy as np
 
 
-def _undistort_points_brown(
-    self,
-    xd: np.ndarray,
-    yd: np.ndarray
+def _active_distortion(
+    self
 ):
-    """Undistort normalized points.
+    if self.distortion_model == 'reduced':
+        indices = [0, 1, 2, 3]
+    else:
+        indices = [0, 1, 2, 3, 4, 5]
 
-    Undistort normalized camera points using a radial and tangential
-    distortion model.
+    if self.tilt:
+        indices += [6, 7]
 
-    Parameters
-    ----------
-    xd : 1D np.ndarray
-        Distorted x-coordinates.
-    yd : 1D np.ndarray
-        Distorted y-coordinates.
+    return np.array(indices, dtype=int)
 
-    Returns
-    -------
-    x : 1D np.ndarray
-        Undistorted x-coordinates.
-    y : 1D np.ndarray
-        Undistorted y-coordinates.
 
-    Notes
-    -----
-    Distortion model is based off of OpenCV. The direct link where the
-    distortion model was accessed is provided below.
-    https://docs.opencv.org/3.4/d9/d0c/group__calib3d.html
+def _brown(
+    x: np.ndarray,
+    y: np.ndarray,
+    coefficients: np.ndarray,
+    jacobian: bool=False
+):
+    k1, k2, p1, p2, k3, k4 = coefficients[:6]
 
-    """
-    k = self.distortion1
-    dtype = self.dtype
-
-    r2 = xd*xd + yd*yd
+    x2 = x * x
+    y2 = y * y
+    xy = x * y
+    r2 = x2 + y2
     r4 = r2 * r2
     r6 = r4 * r2
 
-    num = 1 + k[0]*r2 + k[1]*r4 + k[4]*r6
-    den = 1 + k[5]*r2 + k[6]*r4 + k[7]*r6
+    numerator = 1 + k1 * r2 + k2 * r4 + k3 * r6
+    denominator = 1 + k4 * r2
+    radial = numerator / denominator
 
-    delta_x = k[2]*2*xd*yd + k[3]*(r2 + 2*xd*xd)
-    delta_y = k[3]*2*xd*yd + k[2]*(r2 + 2*yd*yd)
+    tangential_x = 2 * p1 * xy + p2 * (r2 + 2 * x2)
+    tangential_y = p1 * (r2 + 2 * y2) + 2 * p2 * xy
 
-    x = xd*(num / den) + delta_x
-    y = yd*(num / den) + delta_y
+    points = np.array([
+        x * radial + tangential_x,
+        y * radial + tangential_y
+    ])
 
-    return np.array([x, y], dtype=dtype)
+    if not jacobian:
+        return points
+
+    # Derivative of the radial factor with respect to r2.
+    numerator_derivative = k1 + 2 * k2 * r2 + 3 * k3 * r4
+    radial_derivative = numerator_derivative * denominator - numerator * k4
+    radial_derivative /= denominator**2
+
+    position_jacobian = np.empty((x.size, 2, 2))
+
+    position_jacobian[:, 0, 0] = (
+        radial + 2 * x2 * radial_derivative + 2 * p1 * y + 6 * p2 * x
+    )
+    position_jacobian[:, 0, 1] = (
+        2 * xy * radial_derivative + 2 * p1 * x + 2 * p2 * y
+    )
+    position_jacobian[:, 1, 0] = position_jacobian[:, 0, 1]
+    position_jacobian[:, 1, 1] = (
+        radial + 2 * y2 * radial_derivative + 6 * p1 * y + 2 * p2 * x
+    )
+
+    coefficient_jacobian = np.zeros((x.size, 2, 8))
+
+    # k1 and k2.
+    radial_k1 = r2 / denominator
+    radial_k2 = r4 / denominator
+
+    coefficient_jacobian[:, 0, 0] = x * radial_k1
+    coefficient_jacobian[:, 1, 0] = y * radial_k1
+    coefficient_jacobian[:, 0, 1] = x * radial_k2
+    coefficient_jacobian[:, 1, 1] = y * radial_k2
+
+    # p1 and p2.
+    coefficient_jacobian[:, 0, 2] = 2 * xy
+    coefficient_jacobian[:, 1, 2] = r2 + 2 * y2
+    coefficient_jacobian[:, 0, 3] = r2 + 2 * x2
+    coefficient_jacobian[:, 1, 3] = 2 * xy
+
+    # k3 and the denominator coefficient k4.
+    radial_k3 = r6 / denominator
+    radial_k4 = -radial * r2 / denominator
+
+    coefficient_jacobian[:, 0, 4] = x * radial_k3
+    coefficient_jacobian[:, 1, 4] = y * radial_k3
+    coefficient_jacobian[:, 0, 5] = x * radial_k4
+    coefficient_jacobian[:, 1, 5] = y * radial_k4
+
+    return points, position_jacobian, coefficient_jacobian
+
+
+def _tilt_matrix(
+    t1: float,
+    t2: float
+):
+    cos_x = np.cos(t1)
+    sin_x = np.sin(t1)
+    cos_y = np.cos(t2)
+    sin_y = np.sin(t2)
+
+    matrix = np.array([
+        [cos_x, 0, 0],
+        [-sin_x * sin_y, cos_y, 0],
+        [sin_y, -cos_y * sin_x, cos_y * cos_x]
+    ])
+
+    derivative_x = np.array([
+        [-sin_x, 0, 0],
+        [-cos_x * sin_y, 0, 0],
+        [0, -cos_y * cos_x, -cos_y * sin_x]
+    ])
+
+    derivative_y = np.array([
+        [0, 0, 0],
+        [-sin_x * cos_y, -sin_y, 0],
+        [cos_y, sin_y * sin_x, -sin_y * cos_x]
+    ])
+
+    derivatives = np.array([
+        derivative_x,
+        derivative_y
+    ])
+
+    return matrix, derivatives
+
+
+def _distort_normalized(
+    self,
+    x: np.ndarray,
+    y: np.ndarray,
+    jacobian: bool=False
+):
+    if jacobian:
+        points, position_jacobian, coefficient_jacobian = _brown(
+            x,
+            y,
+            self.distortion1,
+            jacobian=True
+        )
+    else:
+        points = _brown(
+            x,
+            y,
+            self.distortion1
+        )
+
+    if self.tilt:
+        t1, t2 = self.distortion1[6:8]
+        matrix, derivatives = _tilt_matrix(t1, t2)
+
+        homogeneous = np.vstack([
+            points,
+            np.ones(x.size)
+        ])
+        tilted = matrix @ homogeneous
+        depth = tilted[2]
+        points = tilted[:2] / depth
+
+        if jacobian:
+            # Quotient-rule derivatives of tilted x and y.
+            tilt_jacobian = np.empty((x.size, 2, 2))
+
+            tilt_jacobian[:, 0, 0] = (matrix[0, 0] - points[0] * matrix[2, 0]) / depth
+            tilt_jacobian[:, 0, 1] = (matrix[0, 1] - points[0] * matrix[2, 1]) / depth
+            tilt_jacobian[:, 1, 0] = (matrix[1, 0] - points[1] * matrix[2, 0]) / depth
+            tilt_jacobian[:, 1, 1] = (matrix[1, 1] - points[1] * matrix[2, 1]) / depth
+
+            position_jacobian = tilt_jacobian @ position_jacobian
+            coefficient_jacobian = tilt_jacobian @ coefficient_jacobian
+
+            for i in range(2):
+                derivative = derivatives[i] @ homogeneous
+                derivative_x = (derivative[0] - points[0] * derivative[2]) / depth
+                derivative_y = (derivative[1] - points[1] * derivative[2]) / depth
+
+                coefficient_jacobian[:, 0, 6+i] = derivative_x
+                coefficient_jacobian[:, 1, 6+i] = derivative_y
+
+    if jacobian:
+        disabled = np.ones(8, dtype=bool)
+        disabled[_active_distortion(self)] = False
+        coefficient_jacobian[:, :, disabled] = 0
+
+        return points, position_jacobian, coefficient_jacobian
+
+    return points.astype(self.dtype)
 
 
 def _distort_points_brown(
@@ -56,178 +194,54 @@ def _distort_points_brown(
     x: np.ndarray,
     y: np.ndarray
 ):
-    """Distort normalized points.
+    x = np.asarray(x)
+    y = np.asarray(y)
 
-    Distort normalized camera points using a radial and tangential
-    distortion model.
-
-    Parameters
-    ----------
-    x : 1D np.ndarray
-        Undistorted x-coordinates.
-    y : 1D np.ndarray
-        Undistorted y-coordinates.
-
-    Returns
-    -------
-    xd : 1D np.ndarray
-        Distorted x-coordinates.
-    yd : 1D np.ndarray
-        Distorted y-coordinates.
-
-    Notes
-    -----
-    Distortion model is based off of OpenCV. The direct link where the
-    distortion model was accessed is provided below.
-    https://docs.opencv.org/3.4/d9/d0c/group__calib3d.html
-
-    """
-    k = self.distortion1
-    dtype = self.dtype
-
-    r2 = x*x + y*y
-    r4 = r2 * r2
-    r6 = r4 * r2
-
-    den = 1 + k[0]*r2 + k[1]*r4 + k[4]*r6
-    num = 1 + k[5]*r2 + k[6]*r4 + k[7]*r6
-
-    delta_x = k[2]*2*x*y + k[3]*(r2 + 2*x*x)
-    delta_y = k[3]*2*x*y + k[2]*(r2 + 2*y*y)
-
-    xd = (x - delta_x) * (num / den)
-    yd = (y - delta_y) * (num / den)
-
-    return np.array([xd, yd], dtype=dtype)
+    return _distort_normalized(
+        self,
+        x,
+        y
+    )
 
 
-def _undistort_points_poly(
+def _undistort_points_brown(
     self,
     xd: np.ndarray,
-    yd: np.ndarray
+    yd: np.ndarray,
+    max_iter: int=30,
+    tolerance: float=1e-12
 ):
-    """Undistort normalized points.
+    target = np.array([xd, yd], dtype=np.float64)
 
-    Undistort normalized camera points using a polynomial distortion model.
+    if self.tilt:
+        t1, t2 = self.distortion1[6:8]
+        matrix, _ = _tilt_matrix(t1, t2)
+        homogeneous = np.vstack([
+            target,
+            np.ones(target.shape[1])
+        ])
 
-    Parameters
-    ----------
-    xd : 1D np.ndarray
-        Distorted x-coordinates.
-    yd : 1D np.ndarray
-        Distorted y-coordinates.
+        untilted = np.linalg.solve(matrix, homogeneous)
+        target = untilted[:2] / untilted[2]
 
-    Returns
-    -------
-    x : 1D np.ndarray
-        Undistorted x-coordinates.
-    y : 1D np.ndarray
-        Undistorted y-coordinates.
+    points = target.copy()
 
-    Notes
-    -----
-    Distortion model based wholly on by MyPTV. The link is provided below.
-    https://github.com/ronshnapp/MyPTV/tree/master/myptv
+    for _ in range(max_iter):
+        projected, position_jacobian, _ = _brown(
+            *points,
+            self.distortion1,
+            jacobian=True
+        )
 
-    The polynomial is of the 2nd order type, with the coefficients arranged
-    like such: coeff = [1, x, y, x**2, y**2, x*y]. This effectively allows
-    any distortion in the x and y axes to be compensated. However, the
-    polynomial model is not stable when extrapolating, so beware of
-    artifacts.
+        residual = (projected - target).T
+        rhs = residual[:, :, np.newaxis]
 
-    References
-    ----------
-    .. [1] Shnapp, R. (2022). MyPTV: A Python Package for 3D Particle
-        Tracking. J. Open Source Softw., 7, 4398.
+        step = np.linalg.solve(position_jacobian, rhs)
+        step = step[:, :, 0].T
 
-    """
-    dtype = self.dtype
-    coeffs = self.distortion2
+        points -= step
 
-    poly = np.array([xd, yd, xd**2, yd**2, xd * yd])
+        if np.max(np.abs(step)) < tolerance:
+            return points.astype(self.dtype)
 
-    e_ = np.dot(coeffs, poly)
-
-    # Calculate derivatives of the polynomials
-    e_0 = e_[0]
-    a, b, c, d, ee = coeffs[0,:]
-    e_xd_0 = a + 2*c*xd + ee*yd
-    e_yd_0 = b + 2*d*yd + ee*xd
-
-    e_1 = e_[1]
-    a, b, c, d, ee = coeffs[1,:]
-    e_xd_1 = a + 2*c*xd + ee*yd
-    e_yd_1 = b + 2*d*yd + ee*xd
-
-    # Calculate the inverse of the polynomials using derivatives
-    A11 = 1.0 + e_xd_0
-    A12 = e_yd_0
-    A21 = e_xd_1
-    A22 = 1.0 + e_yd_1
-
-    rhs1 = xd*(1.0 + e_xd_0) + yd*e_yd_0 - e_0
-    rhs2 = yd*(1.0 + e_yd_1) + xd*e_xd_1 - e_1
-
-    Ainv = np.array([[A22, -A12],[-A21, A11]]) / (A11*A22 - A12*A21)
-
-    xn = Ainv[0, 0] * rhs1 + Ainv[0, 1] * rhs2
-    yn = Ainv[1, 0] * rhs1 + Ainv[1, 1] * rhs2
-
-    return np.array([xn, yn], dtype=dtype)
-
-
-def _distort_points_poly(
-    self,
-    xn: np.ndarray,
-    yn: np.ndarray
-):
-    """Distort normalized points.
-
-    Distort normalized camera points using a polynomial distortion model.
-
-    Parameters
-    ----------
-    xn : 1D np.ndarray
-        Undistorted x-coordinates.
-    yn : 1D np.ndarray
-        Undistorted y-coordinates.
-
-    Returns
-    -------
-    xd : 1D np.ndarray
-        Distorted x-coordinates.
-    yd : 1D np.ndarray
-        Distorted y-coordinates.
-
-    Notes
-    -----
-    Distortion model is inspired by MyPTV. The link is provided below.
-    https://github.com/ronshnapp/MyPTV/tree/master/myptv
-
-    The polynomial is of the 2nd order type, with the coefficients arranged
-    like such: coeff = [x, y, x**2, y**2, x*y]. This effectively allows
-    any distortion in the x and y axes to be compensated. However, the
-    polynomial model is not stable when extrapolating, so beware of
-    artifacts.
-
-    To compute the inverse of the distortion model, we use compute the error
-    term and add it to the normalized camera coordinated. This method does
-    not require further iterations for refinement.
-
-    References
-    ----------
-    .. [1] Shnapp, R. (2022). MyPTV: A Python Package for 3D Particle
-        Tracking. J. Open Source Softw., 7, 4398.
-
-    """
-    dtype = self.dtype
-    coeffs = self.distortion2
-
-    poly = np.array([xn, yn, xn**2, yn**2, xn * yn])
-
-    e_x, e_y = np.dot(coeffs, poly)
-
-    xd = xn + e_x
-    yd = yn + e_y
-
-    return np.array([xd, yd], dtype=dtype)
+    raise RuntimeError('Brown distortion inversion failed to converge')

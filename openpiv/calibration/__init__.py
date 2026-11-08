@@ -17,7 +17,9 @@ Pinhole Model
 =============
     calibrate_intrinsics - Calculate the intrinsic parameters using Zhang's algorithm
     camera - Create an instance of a Pinhole camera model
-    calibrate_dlt - Calibrate and return DLT coefficients and fitting error
+    calibrate_zhang - Initialize and refine planar-target calibration
+    bundle_adjust - Fit cameras and shared target poses with NumPy Schur LM
+    align_reference_plate - Align fitted cameras with a reference capture
     line_intersect - Using two lines, locate where those lines intersect
     multi_line_intersect - Using multiple lines, approximate their intersection
 
