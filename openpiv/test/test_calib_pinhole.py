@@ -18,7 +18,10 @@ file = os.path.join(os.path.dirname(__file__),"test_calibration_points.npz")
 
 
 def get_test_camera_params(
-    case: int=1
+    case: int=1,
+    model: str='reduced',
+    tilt: bool=False,
+    dtype=np.float64
 ):
     pinhole_cam = os.path.join(os.path.dirname(__file__), f"test_calibration_pinhole_{case}.txt")
 
@@ -49,114 +52,59 @@ def get_test_camera_params(
         resolution = resolution,
         translation = translation,
         orientation = orientation,
-        distortion_model = "brown",
+        distortion_model = model,
         distortion1 = distortion,
         focal = focal,
-        principal = principal
+        principal = principal,
+        tilt = tilt,
+        dtype = dtype
     )
 
 
 
-def test_parameters_input():
+@pytest.mark.parametrize("args", ((), ("name",)))
+def test_required_parameters_input(args):
     with pytest.raises(TypeError):
-         # missing camera name
-        pinhole_model.camera()
+        pinhole_model.camera(*args)
 
-        # missing resolution
-        pinhole_model.camera(
-            "name"
-        )
 
+@pytest.mark.parametrize("parameters", [
+    {"name": 0},
+    {"resolution": [0]},
+    {"translation": [0, 0]},
+    {"orientation": [0, 0]},
+    {"distortion_model": "non-existent <random symbols here>"},
+    {"distortion1": np.zeros(7)},
+    {"distortion1": np.zeros((2, 4))},
+    {"focal": "[2, 2]"},
+    {"focal": [1]},
+    {"principal": "[2, 2]"},
+    {"principal": [1]},
+    {"dtype": int},
+    {"tilt": "True"},
+    {"refraction": "water"},
+])
+def test_parameters_input(parameters):
+    kwargs = {"name": "name", "resolution": [0, 0]}
+    kwargs.update(parameters)
     with pytest.raises(ValueError):
-        # name is not a string
-        pinhole_model.camera(
-            0,
-            resolution=[0, 0]
-        )
-
-        # not two element tuple
-        pinhole_model.camera(
-            "name",
-            resolution=[0]
-        )
-
-        # not three element vector
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            translation=[0, 0]
-        )
-
-        # not three element vector
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            orientation=[0, 0]
-        )
-
-        # wrong distortion model
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            distortion_model="non-existent <random symbols here>",
-        )
-
-        # not 8 element vector for brown model
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            distortion_model="brown",
-            distortion1=np.zeros(7)
-        )
-
-        # not 2 x 5 matrix for polynomial model
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            distortion_model="polynomial",
-            distortion2=np.zeros([4, 3])
-        )
-
-        # not 2 element list-like
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            focal="[2, 2]"
-        )
-
-        # not 2 element vector
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            focal=[1]
-        )
-
-        # not 2 element list-like
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            principal="[2, 2]"
-        )
-
-        # not 2 element vector
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            principal=[1]
-        )
-
-        # not a support dtype (supported dtypes are float32 and float64)
-        pinhole_model.camera(
-            "name",
-            resolution=[0, 0],
-            dtype=int
-        )
+        pinhole_model.camera(**kwargs)
 
 
-def test_parameters_initialization():
+@pytest.mark.parametrize("model", ("reduced", "full"))
+@pytest.mark.parametrize("tilt", (True, False))
+@pytest.mark.parametrize("dtype", (np.float32, np.float64))
+def test_parameters_initialization(
+    model: str,
+    tilt: bool,
+    dtype
+):
     cam = pinhole_model.camera(
             "name",
-            resolution=[0, 0]
+            resolution=[512, 512],
+            distortion_model=model,
+            tilt=tilt,
+            dtype=dtype
         )
 
     assert_(hasattr(cam, "name"))
@@ -166,7 +114,8 @@ def test_parameters_initialization():
     assert_(hasattr(cam, "rotation"))
     assert_(hasattr(cam, "distortion_model"))
     assert_(hasattr(cam, "distortion1"))
-    assert_(hasattr(cam, "distortion2"))
+    assert_(hasattr(cam, "tilt"))
+    assert_(hasattr(cam, "refraction"))
     assert_(hasattr(cam, "focal"))
     assert_(hasattr(cam, "principal"))
     assert_(hasattr(cam, "dtype"))
@@ -193,17 +142,21 @@ def test_parameters_initialization():
         [8, ]
     )
 
-    assert_equal(
-        cam.distortion2.shape,
-        [2, 5]
-    )
+    assert_equal(cam.distortion_model, model)
+
+    assert_equal(cam.tilt, tilt)
+
+    assert_equal(cam.refraction, "none")
+
+    assert_array_equal(cam.distortion1, np.zeros(8))
 
     assert_(len(cam.focal) == 2)
 
     assert_(len(cam.principal) == 2)
 
-    # float32 does not work well with the pinhole model, should it be deprecated?
-    assert_(cam.dtype in ["float32", "float64"])
+    assert_array_equal(cam.principal, [256, 256])
+
+    assert_equal(cam.dtype, np.dtype(dtype))
 
 
 def test_rotation_matrix_01():
@@ -232,21 +185,36 @@ def test_rotation_matrix_02():
     )
 
 
-def test_projection_01():
+@pytest.mark.parametrize("model", ("reduced", "full"))
+@pytest.mark.parametrize("tilt", (True, False))
+@pytest.mark.parametrize("correct_distortion", (True, False))
+def test_projection_01(
+    model: str,
+    tilt: bool,
+    correct_distortion: bool
+):
     cam = pinhole_model.camera(
         "name",
-        resolution = [1024, 1024]
+        resolution = [1024, 1024],
+        translation = [0, 0, 500],
+        distortion_model = model,
+        distortion1 = [0.1, -0.01, 0.001, -0.002, 0.001, 0.01, 0.02, -0.01],
+        focal = [1000, 1000],
+        tilt = tilt
     )
 
-    X, Y, Z = np.random.rand(3, 32) * 100.0
+    rng = np.random.default_rng(0)
+    X, Y, Z = rng.uniform(-50, 50, size=(3, 32))
 
     x, y = cam.project_points(
-        [X, Y, Z]
+        [X, Y, Z],
+        correct_distortion = correct_distortion
     )
 
     X_new, Y_new, Z_new = cam.project_to_z(
         [x, y],
-        Z
+        Z,
+        correct_distortion = correct_distortion
     )
 
     assert_array_almost_equal(
@@ -374,7 +342,7 @@ def test_projection_05(
     )
 
 
-@pytest.mark.parametrize("model", ("brown", "polynomial"))
+@pytest.mark.parametrize("model", ("reduced", "full"))
 def test_minimization_01(
     model: str
 ):
@@ -409,7 +377,7 @@ def test_minimization_01(
     assert_(RMSE < 1e-2)
 
 
-@pytest.mark.parametrize("model", ("brown", "polynomial"))
+@pytest.mark.parametrize("model", ("reduced", "full"))
 def test_minimization_02(
     model: str
 ):
@@ -569,17 +537,18 @@ def test_line_intersect_02(
     )
 
 
-def test_save_parameters_1():
+def test_save_parameters_1(tmp_path):
     cam = get_test_camera_params()
 
     cam.save_parameters(
-        "."
+        tmp_path
     )
 
 
 @pytest.mark.parametrize("default", (True, False))
 def test_save_parameters_2(
-    default: bool
+    default: bool,
+    tmp_path
 ):
 
     if default:
@@ -591,11 +560,11 @@ def test_save_parameters_2(
         cam = get_test_camera_params()
 
     cam.save_parameters(
-        ".", "saved_params"
+        tmp_path, "saved_params"
     )
 
 
-def test_load_parameters_1():
+def test_load_parameters_1(tmp_path):
     cam = pinhole_model.camera(
         "dummy",
         resolution = [512, 512]
@@ -603,17 +572,30 @@ def test_load_parameters_1():
 
     with pytest.raises(FileNotFoundError):
         cam.load_parameters(
-            ".",
+            tmp_path,
             "does not exist (hopefully)"
         )
 
 
-def test_load_parameters_2():
-    cam_orig = get_test_camera_params()
+@pytest.mark.parametrize("model", ("reduced", "full"))
+@pytest.mark.parametrize("tilt", (True, False))
+@pytest.mark.parametrize("dtype", (np.float32, np.float64))
+def test_load_parameters_2(
+    model: str,
+    tilt: bool,
+    dtype,
+    tmp_path
+):
+    cam_orig = get_test_camera_params(model=model, tilt=tilt, dtype=dtype)
+    cam_orig.distortion1 = np.array(
+        [0.1, -0.01, 0.001, -0.002, 0.001, 0.01, 0.02, -0.01],
+        dtype=dtype
+    )
+    cam_orig._check_parameters()
 
 
     cam_orig.save_parameters(
-        ".",
+        tmp_path,
         "dummy"
     )
 
@@ -623,7 +605,7 @@ def test_load_parameters_2():
     )
 
     cam_new.load_parameters(
-        ".",
+        tmp_path,
         "dummy"
     )
     assert_array_equal(
@@ -662,8 +644,13 @@ def test_load_parameters_2():
     )
 
     assert_array_equal(
-        cam_orig.distortion2,
-        cam_new.distortion2
+        cam_orig.tilt,
+        cam_new.tilt
+    )
+
+    assert_array_equal(
+        cam_orig.refraction,
+        cam_new.refraction
     )
 
     assert_array_equal(
