@@ -18,7 +18,7 @@ Pinhole Model
     calibrate_intrinsics - Calculate the intrinsic parameters using Zhang's algorithm
     camera - Create an instance of a Pinhole camera model
     calibrate_zhang - Initialize and refine planar-target calibration
-    bundle_adjust - Fit cameras and shared target poses with NumPy Schur LM
+    bundle_adjust - Fit cameras and shared target poses into a single camera system
     align_reference_plate - Align fitted cameras with a reference capture
     line_intersect - Using two lines, locate where those lines intersect
     multi_line_intersect - Using multiple lines, approximate their intersection
@@ -26,15 +26,13 @@ Pinhole Model
 Polynomial Model
 ================
     camera - Create an instance of a Soloff camera model
+    line_intersect - Using two lines, locate where those lines intersect
     multi_line_intersect - Using multiple lines, approximate their intersection
 
-Marker Detection (Marker Grid)
-==============================
-    detect_markers_template - Detect markers via template correlation
-    detect_markers_blobs - Detect markers via labeling blobs
-    get_circular_template - Generate a circular template
-    get_cross_template - Generate a cross template
-    preprocess_image - Preprocess calibration image
+Target Detection
+================
+    detect_markers - Detect marker centers via template correlation and subpixel fitting
+    detect_checkerboard - Detect checkerboard corners with subpixel refinement
 
 Calibration Grid
 ================
@@ -43,11 +41,12 @@ Calibration Grid
 
 Match Calibration Points
 ========================
-    find_corners - Locate 4 or 6 corners of a calibration grid
-    find_nearest_points - Find the closest point to a cursor
-    get_pairs_dlt - Match marker pairs using 4 corners and the DLT algorithm
+    find_median_point - Find the detected point nearest the field median
+    find_middle_point - Find the detected point nearest the field mean
+    find_nearest_points - Find detected points nearest a supplied position
+    get_pairs_auto - Match a symmetric grid using its known board size
+    get_pairs_marching - Match symmetric or two-layer asymmetric grids by marching
     get_pairs_proj - Match marker pairs using a rough projection estimate
-    reorder_image_points - Reorder image points in ascending order
     show_calibration_image - Plot calibration image and markers
 
 Utils
