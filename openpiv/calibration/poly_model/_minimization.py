@@ -1,24 +1,6 @@
 import numpy as np
-from scipy.optimize import least_squares
 
 from .. import _cal_doc_utils
-
-
-def _refine_poly(
-    poly_coeffs: np.ndarray,
-    polynomial: np.ndarray,
-    expected: np.ndarray
-):
-    # use lambdas since it keeps the function definitions local
-    def refine_func(coeffs):
-        projected = np.dot(polynomial, coeffs)
-        return projected - expected
-
-    return least_squares(
-            refine_func,
-            poly_coeffs,
-            method="trf" # more modern lm algorithm
-        ).x
 
 
 @_cal_doc_utils.docfiller
@@ -122,21 +104,22 @@ def _minimize_params(
     ).T
 
 
-    # world to image (forward projection)
+    # World to image (forward projection).
     coeff_wi = np.zeros([19, 2], dtype=dtype)
+
+    forward_scale = np.linalg.norm(
+        polynomial_wi.astype(np.float64),
+        axis=0
+    )
+    forward_scale[forward_scale == 0] = 1.0
+    polynomial_wi_scaled = polynomial_wi / forward_scale
 
     for i in range(2):
         coeff_wi[:, i] = np.linalg.lstsq(
-            polynomial_wi,
+            polynomial_wi_scaled,
             image_points[i],
             rcond=None
-        )[0]
-
-        coeff_wi[:, i] = _refine_poly(
-            coeff_wi[:, i],
-            polynomial_wi,
-            image_points[i]
-        )
+        )[0] / forward_scale
 
     # image to world (ray origins and direction slopes)
     coeff_iw = np.zeros([20, 2], dtype=dtype)
