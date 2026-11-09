@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from warnings import warn
 
 import numpy as np
 
@@ -7,6 +8,120 @@ __all__ = [
     'optimize_general',
     'optimize_board'
 ]
+
+
+def _check_residual(
+    residual: np.ndarray,
+    expected_size: int | None=None
+):
+    residual = np.asarray(
+        residual,
+        dtype=np.float64
+    )
+
+    if residual.ndim != 1 or residual.size == 0:
+        msg = 'Residuals must be a nonempty 1D array'
+        raise ValueError(msg)
+
+    if expected_size is not None and residual.size != expected_size:
+        msg = 'The number of residuals must remain constant'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(residual)):
+        msg = 'Calibration residuals must be finite'
+        raise FloatingPointError(msg)
+
+    return residual
+
+
+def _check_jacobian(
+    jacobian: np.ndarray,
+    expected_shape: tuple[int, int]
+):
+    jacobian = np.asarray(
+        jacobian,
+        dtype=np.float64
+    )
+
+    if jacobian.shape != expected_shape:
+        msg = (
+            f'Jacobian has shape {jacobian.shape}; '
+            f'expected {expected_shape}'
+        )
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(jacobian)):
+        msg = 'Calibration Jacobian must be finite'
+        raise FloatingPointError(msg)
+
+    return jacobian
+
+
+def _linearization_rank(
+    blocks: tuple,
+    mode: str
+):
+    if mode == 'points':
+        jacobian = blocks[2]
+        jacobian = jacobian * _column_scales(jacobian)
+        rank = np.linalg.matrix_rank(jacobian)
+        expected_rank = jacobian.shape[1]
+
+        return int(rank), expected_rank
+
+    _, _, camera_jacobians, board_jacobians = blocks
+
+    camera_scale, board_scales = _target_scales(
+        camera_jacobians,
+        board_jacobians
+    )
+
+    expected_rank = len(camera_scale)
+    n_residuals = 0
+    squared_norm = 0.0
+    scaled_blocks = []
+
+    for camera, board, scale in zip(
+        camera_jacobians, board_jacobians, board_scales
+    ):
+        camera = camera * camera_scale
+        board = board * scale
+        scaled_blocks.append((camera, board))
+        expected_rank += board.shape[1]
+        n_residuals += board.shape[0]
+        squared_norm += np.sum(camera**2) + np.sum(board**2)
+
+    # Use the same tolerance for the camera and board blocks.
+    tolerance = (
+        np.finfo(np.float64).eps
+        * max(n_residuals, expected_rank)
+        * np.sqrt(squared_norm)
+    )
+    board_rank = 0
+    reduced_camera = []
+
+    # Remove the board columns before checking the shared camera columns
+    for camera, board in scaled_blocks:
+        left, singular_values, _ = np.linalg.svd(
+            board,
+            full_matrices=False
+        )
+
+        rank = int(np.count_nonzero(singular_values > tolerance))
+        board_rank += rank
+        basis = left[:, :rank]
+        projection = np.dot(basis, np.dot(basis.T, camera))
+        reduced_camera.append(camera - projection)
+
+    camera_rank = 0
+
+    if len(camera_scale):
+        camera_rank = np.linalg.matrix_rank(
+            np.vstack(reduced_camera),
+            tol=tolerance
+        )
+
+    return int(board_rank + camera_rank), expected_rank
 
 
 def _column_scales(
@@ -54,25 +169,6 @@ def _point_step(
     jacobian: np.ndarray,
     damping: float
 ):
-    """Calculate an LM step for fixed world points using damped QR.
-
-    Parameters
-    ----------
-    residual : np.ndarray
-        Pixel residuals with shape (N,).
-    jacobian : np.ndarray
-        Parameter derivatives with shape (N, M).
-    damping : float
-        Positive damping in scaled parameter coordinates.
-
-    Returns
-    -------
-    step : np.ndarray
-        Parameter update in the original units, with shape (M,).
-    predicted : float
-        Predicted reduction of the undamped quadratic cost.
-
-    """
     scale = _column_scales(jacobian)
     n_parameters = jacobian.shape[1]
 
@@ -160,14 +256,30 @@ def _levenberg_marquardt(
     mode: str='target'
 ):
     if mode not in ('target', 'points'):
-        raise ValueError('LM mode must be "target" or "points"')
+        msg = 'LM mode must be "target" or "points"'
+        raise ValueError(msg)
 
-    if max_iter < 1 or tolerance <= 0:
-        raise ValueError('max_iter and tolerance must be positive')
+    if not isinstance(max_iter, (int, np.integer)) or max_iter < 1:
+        msg = 'max_iter must be a positive integer'
+        raise ValueError(msg)
+
+    if not np.isfinite(tolerance) or tolerance <= 0:
+        msg = 'tolerance must be finite and positive'
+        raise ValueError(msg)
 
     damping = 1e-3
     multiplier = 2.0
-    blocks = linearize(state)
+
+    try:
+        blocks = linearize(state)
+    except FloatingPointError as error:
+        msg = 'Initial calibration residuals and Jacobian must be finite'
+        raise ValueError(msg) from error
+
+    if not np.isfinite(blocks[0]):
+        msg = 'Initial calibration cost must be finite'
+        raise ValueError(msg)
+
     initial_cost = blocks[0]
     history = []
     success = False
@@ -202,9 +314,21 @@ def _levenberg_marquardt(
                 dc, db, predicted = _target_step(
                     residuals, camera_jacobians, board_jacobians, damping
                 )
+                if (
+                    not np.all(np.isfinite(dc))
+                    or not np.all(np.isfinite(db))
+                ):
+                    msg = 'Non-finite calibration step'
+                    raise FloatingPointError(msg)
+
                 trial = update(state, dc, db)
             else:
                 step, predicted = _point_step(residual, jacobian, damping)
+
+                if not np.all(np.isfinite(step)):
+                    msg = 'Non-finite calibration step'
+                    raise FloatingPointError(msg)
+
                 trial = update(state, step)
 
             trial_cost = evaluate(trial)
@@ -214,12 +338,25 @@ def _levenberg_marquardt(
             trial_cost = np.inf
 
         actual = cost - trial_cost
-        if predicted > 0 and np.isfinite(trial_cost):
+
+        if np.isfinite(predicted) and predicted > 0 and np.isfinite(trial_cost):
             ratio = actual / predicted
         else:
             ratio = -np.inf
 
-        accepted = ratio > 0
+        accepted = np.isfinite(ratio) and ratio > 0
+
+        if accepted:
+            try:
+                trial_blocks = linearize(trial)
+
+                if not np.isfinite(trial_blocks[0]):
+                    msg = 'Non-finite calibration cost'
+                    raise FloatingPointError(msg)
+
+            except (np.linalg.LinAlgError, FloatingPointError):
+                accepted = False
+
         history.append({
             'cost': cost,
             'trial_cost': trial_cost,
@@ -230,7 +367,7 @@ def _levenberg_marquardt(
 
         if accepted:
             state = trial
-            blocks = linearize(state)
+            blocks = trial_blocks
             damping *= max(1 / 3, 1 - (2 * ratio - 1)**3)
             damping = max(damping, 1e-15)
             multiplier = 2.0
@@ -247,13 +384,25 @@ def _levenberg_marquardt(
                 message = 'Unable to find a decreasing step'
                 break
 
+    rank, expected_rank = _linearization_rank(blocks, mode)
+
+    if rank < expected_rank:
+        msg = (
+            f'Calibration Jacobian is rank deficient: rank {rank}, '
+            f'expected {expected_rank}'
+        )
+        warn(msg, RuntimeWarning, stacklevel=2)
+
     return state, {
         'success': success,
         'message': message,
         'iterations': len(history),
         'initial_cost': initial_cost,
         'cost': blocks[0],
-        'history': history
+        'history': history,
+        'rank': rank,
+        'expected_rank': expected_rank,
+        'rank_deficient': rank < expected_rank
     }
 
 
@@ -285,30 +434,59 @@ def optimize_general(
     parameters : np.ndarray
         Final accepted parameter vector.
     result : dict
-        Convergence status, costs, and trial history.
+        Convergence status, costs, trial history, and final undamped
+        Jacobian rank. Rank deficiency emits a RuntimeWarning and is
+        reported separately from convergence.
 
     Raises
     ------
     ValueError
-        If max_iter or tolerance is not positive.
+        If iteration controls, initial parameters, residuals or Jacobian
+        shapes are invalid, or there are fewer residuals than parameters.
 
     """
+    initial = np.array(
+        x0,
+        dtype=np.float64
+    )
+
+    if initial.ndim != 1 or initial.size == 0:
+        msg = 'Initial parameters must be a nonempty 1D array'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(initial)):
+        msg = 'Initial parameters must be finite'
+        raise ValueError(msg)
+
+    n_residuals = None
+
     def linearize(parameters):
-        residual = np.asarray(fun(parameters), dtype=np.float64)
+        nonlocal n_residuals
+        residual = _check_residual(fun(parameters), n_residuals)
+
+        if residual.size < initial.size:
+            msg = 'There must be at least as many residuals as parameters'
+            raise ValueError(msg)
+
+        n_residuals = residual.size
+        jacobian = _check_jacobian(
+            jac(parameters),
+            (n_residuals, initial.size)
+        )
         cost = 0.5 * np.dot(residual, residual)
 
-        return cost, residual, jac(parameters)
+        return cost, residual, jacobian
 
     def update(parameters, step):
         return parameters + step
 
     def evaluate(parameters):
-        residual = np.asarray(fun(parameters), dtype=np.float64)
+        residual = _check_residual(fun(parameters), n_residuals)
 
         return 0.5 * np.dot(residual, residual)
 
     return _levenberg_marquardt(
-        np.array(x0, dtype=np.float64),
+        initial,
         linearize,
         update,
         evaluate,
@@ -353,12 +531,16 @@ def optimize_board(
     board_poses : np.ndarray
         Final accepted board poses.
     result : dict
-        Convergence status, costs, and trial history.
+        Convergence status, costs, trial history, and final undamped
+        Jacobian rank for the coupled camera and board parameters.
+        Rank deficiency emits a RuntimeWarning and is reported separately
+        from convergence.
 
     Raises
     ------
     ValueError
-        If max_iter or tolerance is not positive.
+        If iteration controls, initial parameters, residual or Jacobian
+        blocks are invalid, or there are fewer residuals than parameters.
 
     Notes
     -----
@@ -378,12 +560,90 @@ def optimize_board(
         https://doi.org/10.1109/CVPR46437.2021.01155
 
     """
-    def linearize(state):
+    camera_parameters = np.array(
+        initial_camera_parameters,
+        dtype=np.float64
+    )
+    board_poses = np.array(
+        initial_board_poses,
+        dtype=np.float64
+    )
+
+    if camera_parameters.ndim != 1:
+        msg = 'Initial camera parameters must be a 1D array'
+        raise ValueError(msg)
+
+    if board_poses.ndim != 2 or board_poses.shape[1] != 6:
+        msg = 'Initial board poses must have shape (captures, 6)'
+        raise ValueError(msg)
+
+    if board_poses.shape[0] == 0:
+        msg = 'At least one board pose is required'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(camera_parameters)):
+        msg = 'Initial camera parameters must be finite'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(board_poses)):
+        msg = 'Initial board poses must be finite'
+        raise ValueError(msg)
+
+    n_boards = board_poses.shape[0]
+    n_camera = camera_parameters.size
+    residual_sizes = [None] * n_boards
+
+    def residual_blocks(
+        state: tuple
+    ):
         residuals = fun(*state)
+
+        if len(residuals) != n_boards:
+            msg = 'Residual block count must match the board count'
+            raise ValueError(msg)
+
+        checked_residuals = []
+
+        for i, residual in enumerate(residuals):
+            residual = _check_residual(residual, residual_sizes[i])
+            residual_sizes[i] = residual.size
+            checked_residuals.append(residual)
+
+        return checked_residuals
+
+    def linearize(state):
+        residuals = residual_blocks(state)
+
+        if sum(residual_sizes) < n_camera + board_poses.size:
+            msg = 'There must be at least as many residuals as parameters'
+            raise ValueError(msg)
+
         cost = sum(0.5 * np.dot(residual, residual) for residual in residuals)
         camera_jacobians, board_jacobians = jac(*state)
 
-        return cost, residuals, camera_jacobians, board_jacobians
+        if (
+            len(camera_jacobians) != n_boards
+            or len(board_jacobians) != n_boards
+        ):
+            msg = 'Jacobian block counts must match the board count'
+            raise ValueError(msg)
+
+        checked_camera = []
+        checked_board = []
+
+        for i in range(n_boards):
+            camera = _check_jacobian(
+                camera_jacobians[i],
+                (residual_sizes[i], n_camera)
+            )
+            board = _check_jacobian(
+                board_jacobians[i],
+                (residual_sizes[i], 6)
+            )
+            checked_camera.append(camera)
+            checked_board.append(board)
+
+        return cost, residuals, checked_camera, checked_board
 
     def update(state, camera_step, board_step):
         camera_parameters, board_poses = state
@@ -391,13 +651,13 @@ def optimize_board(
         return camera_parameters + camera_step, board_poses + board_step
 
     def evaluate(state):
-        residuals = fun(*state)
+        residuals = residual_blocks(state)
 
         return sum(0.5 * np.dot(residual, residual) for residual in residuals)
 
     initial = (
-        np.array(initial_camera_parameters, dtype=np.float64),
-        np.array(initial_board_poses, dtype=np.float64)
+        camera_parameters,
+        board_poses
     )
     state, result = _levenberg_marquardt(
         initial,
