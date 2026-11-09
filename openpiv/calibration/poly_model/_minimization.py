@@ -115,11 +115,22 @@ def _minimize_params(
     polynomial_wi_scaled = polynomial_wi / forward_scale
 
     for i in range(2):
-        coeff_wi[:, i] = np.linalg.lstsq(
+        coefficients, _, rank, _ = np.linalg.lstsq(
             polynomial_wi_scaled,
             image_points[i],
             rcond=None
-        )[0] / forward_scale
+        )
+
+        expected_rank = polynomial_wi_scaled.shape[1]
+
+        if rank < expected_rank:
+            msg = (
+                'Forward polynomial calibration is rank deficient: '
+                f'rank {rank}, expected {expected_rank}'
+            )
+            raise ValueError(msg)
+
+        coeff_wi[:, i] = coefficients / forward_scale
 
     # image to world (ray origins and direction slopes)
     coeff_iw = np.zeros([20, 2], dtype=dtype)
@@ -130,16 +141,22 @@ def _minimize_params(
     polynomial_iw_scaled = polynomial_iw / scale
 
     for i in range(2):
-        result = np.linalg.lstsq(
+        coefficients, _, rank, _ = np.linalg.lstsq(
             polynomial_iw_scaled,
             object_points[i],
             rcond=None
         )
-        if result[2] != 20:
-            msg = 'Volume ray calibration requires full-rank volumetric points'
+
+        expected_rank = polynomial_iw_scaled.shape[1]
+
+        if rank < expected_rank:
+            msg = (
+                'Volume ray polynomial calibration is rank deficient: '
+                f'rank {rank}, expected {expected_rank}'
+            )
             raise ValueError(msg)
 
-        coeff_iw[:, i] = result[0] / scale
+        coeff_iw[:, i] = coefficients / scale
 
     self.poly_wi = coeff_wi
     self.poly_iw_o = coeff_iw[:10, :]
