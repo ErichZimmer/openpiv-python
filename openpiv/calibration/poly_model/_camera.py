@@ -54,10 +54,10 @@ class camera:
     ):
         self.name = name
         self.resolution = resolution
-        self.poly_wi = poly_wi
-        self.poly_iw_o = poly_iw_o
-        self.poly_iw_v = poly_iw_v
         self.dtype = np.dtype(dtype)
+        self.poly_wi = np.array(poly_wi, dtype=self.dtype, copy=True)
+        self.poly_iw_o = np.array(poly_iw_o, dtype=self.dtype, copy=True)
+        self.poly_iw_v = np.array(poly_iw_v, dtype=self.dtype, copy=True)
 
         # method definitions
         camera._check_parameters   = _check_parameters
