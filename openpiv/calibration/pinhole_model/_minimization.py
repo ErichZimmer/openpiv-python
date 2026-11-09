@@ -3,11 +3,11 @@ from copy import deepcopy
 import numpy as np
 
 from .. import _cal_doc_utils
-from ._optimization import (
+from .._optimizers import optimize_general
+from ._optimize import (
     _camera_columns,
     _camera_vector,
-    _levenberg_marquardt,
-    _set_camera_vector,
+    _set_camera_vector
 )
 
 
@@ -21,7 +21,10 @@ def _minimize_params(
     max_iter: int=1000,
     iterations: int=3
 ):
-    """Refine pinhole camera parameters using NumPy Levenberg-Marquardt.
+    """Refine pinhole camera parameters using NumPy QR Levenberg-Marquardt.
+
+    Fit the selected camera parameters to image observations of fixed
+    world points. The world points may be distributed throughout a volume.
 
     Parameters
     ----------
@@ -46,9 +49,9 @@ def _minimize_params(
     Raises
     ------
     ValueError
-        If camera parameters are invalid, object points do not have shape
-        (3, N), image points do not have matching shape (2, N), or too few
-        calibration points are supplied.
+        If camera parameters are invalid, point arrays have invalid
+        shapes, too few calibration points are supplied, or max_iter
+        is not positive when running a refinement pass.
     RuntimeError
         If a Levenberg-Marquardt refinement pass fails.
 
@@ -76,81 +79,48 @@ def _minimize_params(
         msg = f'Too few points to calibrate. Need at least {min_points} points'
         raise ValueError(msg)
 
-    def linearize(
-        cam
-    ):
-        projected, projection_jacobian, _ = cam.project_jacobian(
+    camera = deepcopy(self)
+    camera.dtype = np.dtype(np.float64)
+    values = _camera_vector(camera).astype(np.float64)
+
+    def set_parameters(parameters):
+        values[columns] = parameters
+        _set_camera_vector(camera, values)
+
+    def residuals(parameters):
+        set_parameters(parameters)
+
+        if np.any(camera.focal <= 0):
+            return np.full(image_points.size, np.inf)
+
+        projected = camera.project_points(
             object_points,
             correct_distortion=correct_distortion
         )
 
-        # Interleave x and y residuals in the same order as Jacobian rows.
-        residual = (projected - image_points).T
-        residual = residual.reshape(-1)
+        return (projected - image_points).T.ravel()
 
-        parameter_jacobian = projection_jacobian[:, :, columns]
-        parameter_jacobian = parameter_jacobian.reshape(-1, n_parameters)
+    def jacobian(parameters):
+        set_parameters(parameters)
 
-        cost = 0.5 * residual @ residual
-        camera_normal = parameter_jacobian.T @ parameter_jacobian
-        camera_gradient = parameter_jacobian.T @ residual
-
-        # The Schur LM expects board parameters, which do not exist
-        # for single-camera optimizations.
-        board_normal = np.zeros((0, 6, 6))
-        cross = np.zeros((0, n_parameters, 6))
-        board_gradient = np.zeros((0, 6))
-
-        return (
-            cost,
-            camera_normal,
-            board_normal,
-            cross,
-            camera_gradient,
-            board_gradient
-        )
-
-    def update(
-        cam,
-        camera_step: np.ndarray,
-        palceholder: np.ndarray
-    ):
-        trial = deepcopy(cam)
-        values = _camera_vector(trial)
-        values[columns] += camera_step
-
-        _set_camera_vector(
-            trial,
-            values
-        )
-
-        return trial
-
-    def evaluate(
-        cam
-    ):
-        if np.any(np.asarray(cam.focal) <= 0):
-            return np.inf
-
-        projected = cam.project_points(
+        _, projection_jacobian, _ = camera.project_jacobian(
             object_points,
             correct_distortion=correct_distortion
         )
-        residual = projected - image_points
-        cost = 0.5 * np.sum(residual**2)
 
-        return cost
+        # Interleave x and y rows to match the expected format of the residual vector.
+        return projection_jacobian[:, :, columns].reshape(
+            -1,
+            n_parameters
+        )
 
-    state = deepcopy(self)
-    state.dtype = np.dtype(np.float64)
+    parameters = values[columns]
 
     for _ in range(iterations):
-        # TODO: Adapt the Schur LM optimizer for single cameras and multiple cameras
-        state, result = _levenberg_marquardt(
-            state,
-            linearize,
-            update,
-            evaluate,
+        parameters, result = optimize_general(
+            residuals,
+            parameters,
+            jac=jacobian,
             max_iter=max_iter
         )
 
@@ -158,10 +128,5 @@ def _minimize_params(
             msg = f"Pinhole refinement failed: {result['message']}"
             raise RuntimeError(msg)
 
-    fitted_values = _camera_vector(state)
-    fitted_values = fitted_values.astype(self.dtype)
-
-    _set_camera_vector(
-        self,
-        fitted_values
-    )
+    values[columns] = parameters
+    _set_camera_vector(self, values.astype(self.dtype))

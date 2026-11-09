@@ -497,7 +497,7 @@ def calibrate_zhang(
     }
 
     if refine:
-        # Import here because global BA initialization also uses Zhang.
+        # Import bundle adjust here to avoid circular imports between _zhang and _bundle_adjust
         from ._bundle_adjustment import bundle_adjust
 
         poses, result = bundle_adjust(

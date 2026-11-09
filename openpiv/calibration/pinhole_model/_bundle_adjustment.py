@@ -2,14 +2,15 @@ from copy import deepcopy
 
 import numpy as np
 
-from ._global_pose import _estimate_global_pose
-from ._optimization import (
+from .._optimizers import optimize_board
+from ._optimize import (
     _camera_columns,
     _camera_vector,
-    _levenberg_marquardt,
-    _set_camera_vector,
+    _set_camera_vector
 )
+from ._global_pose import _estimate_global_pose
 from ._utils import _rotation, _rotation_angles
+
 
 __all__ = [
     'align_reference_plate',
@@ -43,13 +44,13 @@ def _board_world(
     pose: np.ndarray
 ):
     rotation, derivatives = _rotation(pose[3:])
-    world = rotation @ points + pose[:3, None]
+    world = np.dot(rotation, points) + pose[:3, None]
 
     jac = np.zeros((points.shape[1], 3, 6))
     jac[:, :, :3] = np.eye(3)
 
     for i in range(3):
-        jac[:, :, 3+i] = (derivatives[i] @ points).T
+        jac[:, :, 3+i] = np.dot(derivatives[i], points).T
 
     return world, jac
 
@@ -142,14 +143,9 @@ def _bundle_blocks(
     )
     size = offsets[-1]
 
-    A = np.zeros((size, size))
-    B = np.zeros((len(poses), 6, 6))
-    E = np.zeros((len(poses), size, 6))
-
-    gc = np.zeros(size)
-    gb = np.zeros((len(poses), 6))
-
-    cost = 0.0
+    residuals = [[] for _ in poses]
+    camera_jacobians = [[] for _ in poses]
+    board_jacobians = [[] for _ in poses]
 
     for i, j, valid, image in observations:
         world, board_jac = _board_world(
@@ -160,58 +156,48 @@ def _bundle_blocks(
         cam = cameras[i]
 
         if not jacobian:
-            camera_points = cam.rotation.T @ (
+            camera_points = np.dot(
+                cam.rotation.T,
                 world - cam.translation[:, None]
             )
             depth = camera_points[2]
 
-            if np.any(depth <= 0) or np.any(np.asarray(cam.focal) <= 0):
-                return np.inf
+            if np.any(depth <= 0) or np.any(cam.focal <= 0):
+                residual = np.full(image.size, np.inf)
+            else:
+                projected = cam.project_points(
+                    world,
+                    correct_distortion
+                )
+                residual = (projected - image).T.ravel()
 
-        if jacobian:
-            projected, camera_jac, point_jac = cam.project_jacobian(
-                world,
-                correct_distortion
-            )
-        else:
-            projected = cam.project_points(
-                world,
-                correct_distortion
-            )
+            residuals[j].append(residual)
+            continue
 
-        residual = (projected - image).T.ravel()
-        cost += 0.5 * residual @ residual
+        _, camera_jac, point_jac = cam.project_jacobian(
+            world,
+            correct_distortion
+        )
 
-        if jacobian:
-            c = camera_jac[:, :, columns[i]].reshape(
-                -1,
-                len(columns[i])
-            )
-            b = (point_jac @ board_jac).reshape(-1, 6)
+        camera_rows = np.zeros((image.size, size))
+        section = slice(offsets[i], offsets[i+1])
+        camera_rows[:, section] = camera_jac[:, :, columns[i]].reshape(
+            -1,
+            len(columns[i])
+        )
 
-            section = slice(
-                offsets[i],
-                offsets[i+1]
-            )
+        board_rows = np.einsum('nij,njk->nik', point_jac, board_jac)
 
-            A[section, section] += c.T @ c
-            B[j] += b.T @ b
-            E[j, section] += c.T @ b
-
-            gc[section] += c.T @ residual
-            gb[j] += b.T @ residual
+        camera_jacobians[j].append(camera_rows)
+        board_jacobians[j].append(board_rows.reshape(-1, 6))
 
     if jacobian:
         return (
-            cost,
-            A,
-            B,
-            E,
-            gc,
-            gb
+            [np.vstack(rows) for rows in camera_jacobians],
+            [np.vstack(rows) for rows in board_jacobians]
         )
 
-    return cost
+    return [np.concatenate(rows) for rows in residuals]
 
 
 def _change_frame(
@@ -228,9 +214,12 @@ def _change_frame(
     for cam in cameras:
         cam._get_rotation_matrix()
 
-        cam.translation = rotation.T @ (cam.translation - origin)
+        cam.translation = np.dot(
+            rotation.T,
+            cam.translation - origin
+        )
         cam.orientation = _rotation_angles(
-            rotation.T @ cam.rotation
+            np.dot(rotation.T, cam.rotation)
         )
 
         cam._get_rotation_matrix()
@@ -238,9 +227,12 @@ def _change_frame(
     for j, pose in enumerate(poses):
         board_rotation, _ = _rotation(pose[3:])
 
-        new_poses[j, :3] = rotation.T @ (pose[:3] - origin)
+        new_poses[j, :3] = np.dot(
+            rotation.T,
+            pose[:3] - origin
+        )
         new_poses[j, 3:] = _rotation_angles(
-            rotation.T @ board_rotation
+            np.dot(rotation.T, board_rotation)
         )
 
     return new_poses
@@ -256,12 +248,11 @@ def bundle_adjust(
     max_iter: int=100,
     tolerance: float=1e-10
 ):
-    """Calibrate cameras and shared target poses using Schur LM.
+    """Calibrate cameras and shared target poses using square-root QR LM.
 
     Refine the camera parameters and one six-parameter board pose per
-    capture by minimizing pixel reprojection errors. Camera 0 is held
-    stationary while fitting to avoid cameras from being freely placed
-    during minimization.
+    capture by minimizing pixel reprojection errors. Hold camera 0's pose
+    fixed to define the common world frame.
 
     Parameters
     ----------
@@ -279,20 +270,20 @@ def bundle_adjust(
         omitted, initialize intrinsics with Zhang's method, align the grid
         correspondences geometrically, and estimate camera and board
         poses in camera 0's frame. Each camera needs at least three
-        non-degenerate views. Otherwise use the supplied camera and board
-        parameters and leave the input correspondences as supplied.
+        non-degenerate views. If supplied, use the provided camera and
+        board parameters and the input correspondences as given.
     correct_focal : bool, optional
         Refine both focal lengths. Principal points are always refined.
         Default is True.
     correct_distortion : bool, optional
-        Include and refine the enabled Brown and sensor-tilt coefficients.
-        If False, use an ideal pinhole projection and leave the stored
+        Include and refine the enabled Brown and sensor tilt coefficients.
+        If False, use an ideal pinhole projection and hold the stored
         distortion coefficients fixed. Default is True.
     max_iter : int, optional
         Maximum number of attempted LM steps. Default is 100.
     tolerance : float, optional
-        Scaled gradient tolerance. The minimization will asl stop once
-        the cost function reduction is less tolerance times
+        Scaled gradient tolerance. The optimizer also stops when an
+        accepted cost reduction is less than tolerance times
         max(1, current cost). Default is 1e-10.
 
     Returns
@@ -309,6 +300,15 @@ def bundle_adjust(
         returns result['permutations'][camera][capture] column indices
         mapping original observations to the common board indexing.
         Missing views have a permutation of None.
+
+    Notes
+    -----
+    When performing camera calibration of a PIV imaging system using
+    bundle adjustment on planes of unkown origins, it is highly recommended
+    that either the first frame or the last frame contains the plane that
+    sets the origin of the system. Without this alignment plane, regular
+    Tomo-PIV and associated reconstruction algorithms will fail as there is
+    no set origin in the system.
 
     """
     points = _board_points(object_points)
@@ -390,22 +390,26 @@ def bundle_adjust(
         msg = 'Too few observations for the number of fitted parameters'
         raise ValueError(msg)
 
-    def linearize(
-        state: tuple
-    ):
-        return _bundle_blocks(
-            state,
-            points,
-            observations,
-            columns,
-            correct_distortion
-        )
+    camera_values = [_camera_vector(cam) for cam in state_cameras]
+    offsets = np.cumsum([0] + [len(active) for active in columns])
 
-    def evaluate(
-        state: tuple
-    ):
+    initial = np.concatenate([
+        values[active]
+        for values, active in zip(camera_values, columns)
+    ])
+
+    def set_parameters(parameters):
+        for i, (cam, values, active) in enumerate(
+            zip(state_cameras, camera_values, columns)
+        ):
+            values[active] = parameters[offsets[i]:offsets[i+1]]
+            _set_camera_vector(cam, values)
+
+    def residuals(parameters, board_poses):
+        set_parameters(parameters)
+
         return _bundle_blocks(
-            state,
+            (state_cameras, board_poses),
             points,
             observations,
             columns,
@@ -413,47 +417,31 @@ def bundle_adjust(
             jacobian=False
         )
 
-    def update(
-        state: tuple,
-        dc: np.ndarray,
-        db: np.ndarray
-    ):
-        trial_cameras = deepcopy(state[0])
-        offset = 0
+    def jacobian(parameters, board_poses):
+        set_parameters(parameters)
 
-        for cam, active in zip(trial_cameras, columns):
-            values = _camera_vector(cam)
-            values[active] += dc[offset:offset+len(active)]
+        return _bundle_blocks(
+            (state_cameras, board_poses),
+            points,
+            observations,
+            columns,
+            correct_distortion
+        )
 
-            _set_camera_vector(
-                cam,
-                values
-            )
-
-            offset += len(active)
-
-        trial_poses = state[1] + db
-
-        return trial_cameras, trial_poses
-
-    state = (state_cameras, poses)
-
-    state, result = _levenberg_marquardt(
-        state,
-        linearize,
-        update,
-        evaluate,
+    parameters, fitted_poses, result = optimize_board(
+        residuals,
+        initial,
+        poses,
+        jac=jacobian,
         max_iter=max_iter,
         tolerance=tolerance
     )
 
-    for cam, fitted in zip(cameras, state[0]):
-        values = _camera_vector(fitted).astype(cam.dtype)
+    set_parameters(parameters)
 
-        _set_camera_vector(
-            cam,
-            values
-        )
+    for cam, fitted in zip(cameras, state_cameras):
+        values = _camera_vector(fitted).astype(cam.dtype)
+        _set_camera_vector(cam, values)
 
     result['rms'] = np.sqrt(
         2 * result['cost'] / n_residuals
@@ -462,7 +450,7 @@ def bundle_adjust(
     if permutations is not None:
         result['permutations'] = permutations
 
-    return state[1], result
+    return fitted_poses, result
 
 
 def align_reference_plate(
@@ -489,8 +477,7 @@ def align_reference_plate(
     -------
     board_poses : np.ndarray
         Poses in the reference-plate frame, with shape (captures, 6).
-        The reference board has identity pose and camera 0 is no longer
-        fixed at the origin.
+        The reference board has identity pose in this frame.
 
     """
     poses = np.asarray(board_poses, dtype=np.float64)
