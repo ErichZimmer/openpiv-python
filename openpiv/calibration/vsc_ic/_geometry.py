@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.optimize import least_squares
 
+from .._camera import BaseCamera
+
 
 def _get_grid_spacing(
     X: np.ndarray,
@@ -34,7 +36,7 @@ def _get_grid_spacing(
 
 
 def _get_los_slopes(
-    cams: list,
+    cams: list[BaseCamera],
     reference: np.ndarray,
     step: float,
 ) -> np.ndarray:
@@ -88,7 +90,7 @@ def _get_streak_geometry(
 
 
 def _world_to_image_offsets(
-    cams: list,
+    cams: list[BaseCamera],
     reference: np.ndarray,
     offsets: np.ndarray,
 ) -> np.ndarray:
@@ -110,7 +112,7 @@ def _world_to_image_offsets(
 
 
 def _minimize_image_disparities(
-    cams: list,
+    cams: list[BaseCamera],
     reference: np.ndarray,
     offsets: np.ndarray,
     slopes: np.ndarray,

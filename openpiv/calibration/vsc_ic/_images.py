@@ -1,5 +1,6 @@
 import numpy as np
 
+from .._camera import BaseCamera
 from ..stereo import (
     dewarp_image,
     get_common_world_grid,
@@ -9,7 +10,7 @@ from ._geometry import _get_grid_spacing
 
 
 def _prepare_image_stacks(
-    cams: list,
+    cams: list[BaseCamera],
     images: list,
 ) -> list:
     if len(cams) != len(images) or len(cams) < 2:
@@ -47,7 +48,7 @@ def _prepare_image_stacks(
 
 
 def _prepare_world_grid(
-    cams: list,
+    cams: list[BaseCamera],
     z: float,
     window_size: int | tuple,
     world_grid: tuple | None,
@@ -87,7 +88,7 @@ def _prepare_world_grid(
 
 
 def _get_window_mapping(
-    cam,
+    cam: BaseCamera,
     X: np.ndarray,
     Y: np.ndarray,
     z: float,

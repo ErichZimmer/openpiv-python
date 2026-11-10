@@ -686,18 +686,18 @@ def get_pairs_marching(
     detections within the acceptance tolerance can still be matched. Each
     accepted detection is used once, and input arrays are not modified.
 
-    Origin-and-axis initialization is inspired by CalVi [1]_. Median-based
+    Origin-and-axis initialization is inspired by CalVi [CalVi2024]_. Median-based
     seed selection and expansion using locally updated grid steps follow
-    ideas described by Douskos et al. [2]_.
+    ideas described by Douskos et al. [Douskos2008]_.
 
     References
     ----------
-    .. [1] G. Paolillo and T. Astarita, "CalVi User Guide",
+    .. [CalVi2024] G. Paolillo and T. Astarita, "CalVi User Guide",
         PaIRS version 0.1.13, revised February 7, 2024,
         Sections 9 and 11, pp. 11-13 and 19-20.
         https://www.pairs.unina.it/web/CalVi-Guide.pdf
 
-    .. [2] V. Douskos, I. Kalisperakis, G. Karras, and E. Petsa,
+    .. [Douskos2008] V. Douskos, I. Kalisperakis, G. Karras, and E. Petsa,
         "Fully automatic camera calibration using regular planar
         patterns", Int. Arch. Photogramm. Remote Sens. Spatial
         Inf. Sci., XXXVII-B5, pp. 21-26, 2008.

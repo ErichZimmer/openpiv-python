@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.typing import DTypeLike
 
+from .._camera import BaseCamera
 from ._check_params import _check_parameters
 from ._distortion import _distort_points_brown, _undistort_points_brown
 from ._jacobian import _project_jacobian
@@ -20,7 +21,7 @@ __all__ = [
 ]
 
 
-class camera:
+class camera(BaseCamera):
     """A pinhole camera with Brown distortion and optional sensor tilt.
 
     .. rubric:: Methods
@@ -93,9 +94,7 @@ class camera:
         tilt: bool=False,
         refraction: str='none'
     ):
-        self.name = name
-        self.resolution = resolution
-        self.dtype = np.dtype(dtype)
+        super().__init__(name, resolution, dtype)
         self.translation = np.array([0, 0, 1] if translation is None else translation, dtype=dtype)
         self.orientation = np.array(np.zeros(3) if orientation is None else orientation, dtype=dtype)
         self.distortion1 = np.array(np.zeros(8) if distortion1 is None else distortion1, dtype=dtype)

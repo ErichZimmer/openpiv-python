@@ -1,9 +1,8 @@
 
-from typing import Any
-
 import numpy as np
 
 from . import _cal_doc_utils
+from ._camera import BaseCamera
 
 __all__ = [
     'get_image_mapping',
@@ -88,7 +87,7 @@ def get_rmse(
 
 @_cal_doc_utils.docfiller
 def get_reprojection_error(
-    cam: Any,
+    cam: BaseCamera,
     object_points: np.ndarray,
     image_points: np.ndarray
 ):
@@ -99,7 +98,7 @@ def get_reprojection_error(
 
     Parameters
     ----------
-    cam : camera
+    cam : openpiv.calibration.BaseCamera
         An instance of a camera object.
     %(object_points)s
     %(image_points)s
@@ -158,7 +157,7 @@ def get_reprojection_error(
 
 @_cal_doc_utils.docfiller
 def get_los_error(
-    cam: Any,
+    cam: BaseCamera,
     z: float
 ):
     """Calculate camera LOS error.
@@ -167,7 +166,7 @@ def get_los_error(
 
     Parameters
     ----------
-    cam : camera
+    cam : openpiv.calibration.BaseCamera
         An instance of a camera object.
     %(project_z)s
 
@@ -250,7 +249,7 @@ def get_los_error(
 # This script was originally from Theo's polynomial calibration repository.
 @_cal_doc_utils.docfiller
 def get_image_mapping(
-    cam,
+    cam: BaseCamera,
     z: float = 0.0,
 ):
     """Get image Mapping.
@@ -264,7 +263,7 @@ def get_image_mapping(
 
     Parameters
     ----------
-    cam : camera
+    cam : openpiv.calibration.BaseCamera
         An instance of a camera object.
 
     Returns

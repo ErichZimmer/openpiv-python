@@ -361,13 +361,16 @@ def detect_checkerboard(
     of the image boundary are excluded because their filter support is
     incomplete.
 
+    For related checkerboard detection methods, see [OpenCVFastX]_ and
+    [Duda2018]_.
+
     References
     ----------
-    .. [1] OpenCV contributors. FastX corner detector, implemented in
+    .. [OpenCVFastX] OpenCV contributors. FastX corner detector, implemented in
        ``modules/calib3d/src/chessboard.cpp``.
        https://github.com/opencv/opencv/blob/4.x/modules/calib3d/src/chessboard.cpp
 
-    .. [2] Alexander Duda and Udo Frese. "Accurate Detection and Localization
+    .. [Duda2018] Alexander Duda and Udo Frese. "Accurate Detection and Localization
        of Checkerboard Corners for Calibration." Proceedings of the British
        Machine Vision Conference (BMVC), 2018.
        https://bmvc2018.org/contents/papers/0508.pdf

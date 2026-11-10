@@ -394,14 +394,14 @@ def calibrate_zhang(
 
     Notes
     -----
-    k1/k2 initialization follows Equation (13) in Zhang [1]_. The joint
+    k1/k2 initialization follows Equation (13) in Zhang [Zhang2000]_. The joint
     pixel refinement follows Equation (14), extended to the selected Brown
     and sensor-tilt coefficients. When performing non-linear optimization,
     solver failures will return the last fitted state and success=False.
 
     References
     ----------
-    .. [1] Zhang, Z. (2000). A flexible new technique for camera
+    .. [Zhang2000] Zhang, Z. (2000). A flexible new technique for camera
         calibration. IEEE Transactions on Pattern Analysis and Machine
         Intelligence, 22(11), 1330-1334. See Sections 3.1-3.4 of
         Microsoft Research report MSR-TR-98-71, Equations (13)-(14).

@@ -11,10 +11,13 @@ that of pinhole and polynomial calibration methods.
 
 Functions
 =========
-    camera - Create an instance of a DLT camera model
-    calibrate_dlt - Calibrate and return DLT coefficients and fitting error
-    line_intersect - Using two lines, locate where those lines intersect
-    multi_line_intersect - Using multiple lines, approximate their intersection
+camera - Create an instance of a DLT camera model
+
+calibrate_dlt - Calibrate and return DLT coefficients and fitting error
+
+line_intersect - Using two lines, locate where those lines intersect
+
+multi_line_intersect - Using multiple lines, approximate their intersection
 
 Note
 ====

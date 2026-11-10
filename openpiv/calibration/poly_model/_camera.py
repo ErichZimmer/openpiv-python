@@ -2,15 +2,19 @@
 import numpy as np
 from numpy.typing import DTypeLike
 
+from .._camera import BaseCamera
 from ._check_params import _check_parameters
 from ._minimization import _minimize_params
 from ._projection import _get_inverse_vector, _project_points, _project_to_z
 from ._utils import _load_parameters, _save_parameters
 
-__all__ = ['camera']
+
+__all__ = [
+    'camera'
+]
 
 
-class camera:
+class camera(BaseCamera):
     """An instance of a polynomial camera model.
 
     Create an instance of a polynomial camera. The polynomial camera model
@@ -61,9 +65,7 @@ class camera:
         poly_iw_v: np.ndarray=np.ones((2,10), dtype=np.float64).T,
         dtype: DTypeLike=np.float64
     ):
-        self.name = name
-        self.resolution = resolution
-        self.dtype = np.dtype(dtype)
+        super().__init__(name, resolution, dtype)
         self.poly_wi = np.array(poly_wi, dtype=self.dtype, copy=True)
         self.poly_iw_o = np.array(poly_iw_o, dtype=self.dtype, copy=True)
         self.poly_iw_v = np.array(poly_iw_v, dtype=self.dtype, copy=True)

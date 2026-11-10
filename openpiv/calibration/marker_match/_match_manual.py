@@ -1,12 +1,14 @@
 import numpy as np
 
+from .._camera import BaseCamera
+
 __all__ = [
     'get_pairs_proj'
 ]
 
 
 def get_pairs_proj(
-    cam: object,
+    cam: BaseCamera,
     object_points: np.ndarray,
     image_points: np.ndarray,
     tolerance: float=10
@@ -22,7 +24,7 @@ def get_pairs_proj(
 
     Parameters
     ----------
-    cam : object
+    cam : openpiv.calibration.BaseCamera
         An instance of a camera.
     proj_func : function
         Projection function with the following signature:

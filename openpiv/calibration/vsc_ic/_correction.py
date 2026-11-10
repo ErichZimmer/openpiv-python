@@ -1,5 +1,7 @@
 import numpy as np
 
+from .._camera import BaseCamera
+
 
 __all__ = [
     'fix_disparity'
@@ -28,7 +30,7 @@ def _make_calibration_grid(disparity: dict) -> np.ndarray:
 
 
 def fix_disparity(
-    cams: list,
+    cams: list[BaseCamera],
     disparity: dict,
     object_points: np.ndarray | None = None,
 ) -> dict:
@@ -40,7 +42,7 @@ def fix_disparity(
 
     Parameters
     ----------
-    cams : list
+    cams : list of openpiv.calibration.BaseCamera
         A list of calibrated camera instances used to calculate the disparity.
     disparity : dict
         A valid triple-image disparity measurement returned by

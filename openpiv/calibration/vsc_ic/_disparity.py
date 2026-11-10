@@ -2,6 +2,7 @@ from itertools import combinations
 
 import numpy as np
 
+from .._camera import BaseCamera
 from ._correlation import (
     _correlate_camera_triple,
     _correlate_images,
@@ -50,7 +51,7 @@ def _check_depth_planes(z_planes: np.ndarray) -> np.ndarray:
 
 
 def _get_supported_mappings(
-    cams: list,
+    cams: list[BaseCamera],
     X: np.ndarray,
     Y: np.ndarray,
     z: float,
@@ -69,7 +70,7 @@ def _get_supported_mappings(
 
 
 def _accumulate_pairwise_maps(
-    cams: list,
+    cams: list[BaseCamera],
     stacks: list,
     X: np.ndarray,
     Y: np.ndarray,
@@ -165,7 +166,7 @@ def _align_reference_pair(
 
 
 def _accumulate_triple_maps(
-    cams: list,
+    cams: list[BaseCamera],
     stacks: list,
     X: np.ndarray,
     Y: np.ndarray,
@@ -239,7 +240,7 @@ def _measure_triple_disparities(
 
 
 def get_disparity(
-    cams: list,
+    cams: list[BaseCamera],
     images: list,
     z_planes: np.ndarray,
     world_grid: tuple | None = None,
@@ -258,7 +259,7 @@ def get_disparity(
 
     Parameters
     ----------
-    cams : list of camera
+    cams : list of openpiv.calibration.BaseCamera
         List of cameras
     images : list of ndarray
         One image (height, width), or image stack (n_frames, height, width)

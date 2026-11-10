@@ -13,8 +13,11 @@ limit artifacts from extrapolation.
 
 Functions
 =========
-    camera - Create an instance of a Soloff camera model
-    multi_line_intersect - Using multiple lines, approximate their intersection
+camera - Create an instance of a Soloff camera model
+
+line_intersect - Using two lines, locate where those lines intersect
+
+multi_line_intersect - Using multiple lines, approximate their intersection
 
 Note
 ====
@@ -26,5 +29,6 @@ conventions that are normally protected behind namespaces.
 """
 from ._camera import *
 from ._epipolar_geom import *
+
 
 __all__ = [s for s in dir() if not s.startswith('_')]

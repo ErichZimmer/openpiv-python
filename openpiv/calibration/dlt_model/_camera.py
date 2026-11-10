@@ -2,15 +2,19 @@
 import numpy as np
 from numpy.typing import DTypeLike
 
+from .._camera import BaseCamera
 from ._check_params import _check_parameters
 from ._minimization import _minimize_params
 from ._projection import _get_inverse_vector, _project_points, _project_to_z
 from ._utils import _load_parameters, _save_parameters
 
-__all__ = ['camera']
+
+__all__ = [
+    'camera'
+]
 
 
-class camera:
+class camera(BaseCamera):
     """An instance of a DLT camera model.
 
     Create an instance of a DLT camera. The DLT camera model is based on
@@ -53,10 +57,8 @@ class camera:
         coeffs: np.ndarray=np.identity(3),
         dtype: DTypeLike=np.float64
     ):
-        self.name = name
-        self.resolution = resolution
+        super().__init__(name, resolution, dtype)
         self.coeffs = np.array(coeffs, copy=True)
-        self.dtype = np.dtype(dtype)
 
         # check camera params at init
         self._check_parameters()
