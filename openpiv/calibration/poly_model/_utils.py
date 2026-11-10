@@ -86,7 +86,7 @@ def _load_parameters(
         name = f.readline()[:-1]
 
         _r = f.readline()[:-2]
-        resolution = np.array([float(s) for s in _r.split()])
+        resolution = np.array([float(s) for s in _r.split()], dtype=int)
 
         poly_wi = []
         for _i in range(19):

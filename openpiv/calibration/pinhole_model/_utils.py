@@ -175,7 +175,7 @@ def _load_parameters(
 
     with open(parameter_path) as parameter_file:
         self.name = parameter_file.readline().strip()
-        self.resolution = np.fromstring(parameter_file.readline(), sep=' ')
+        self.resolution = np.fromstring(parameter_file.readline(), sep=' ').astype(int)
         self.translation = np.fromstring(parameter_file.readline(), sep=' ')
         self.orientation = np.fromstring(parameter_file.readline(), sep=' ')
 

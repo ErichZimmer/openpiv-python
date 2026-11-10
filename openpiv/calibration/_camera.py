@@ -17,7 +17,7 @@ class BaseCamera(ABC):
         dtype: DTypeLike=np.float64
     ):
         self.name = name
-        self.resolution = resolution
+        self.resolution = np.array(resolution, dtype=int)
         self.dtype = np.dtype(dtype)
 
     @abstractmethod
