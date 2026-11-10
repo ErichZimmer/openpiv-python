@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import ndimage
 
+
 __all__ = [
     'detect_checkerboard'
 ]

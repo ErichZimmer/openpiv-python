@@ -5,6 +5,7 @@ from scipy.signal import fftconvolve
 from scipy.ndimage import uniform_filter, maximum_filter
 from .. import _cal_doc_utils
 
+
 __all__ = [
     'detect_markers'
 ]

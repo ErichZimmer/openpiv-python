@@ -2,6 +2,7 @@ import numpy as np
 
 from .. import _cal_doc_utils
 
+
 __all__ = [
     'find_median_point',
     'find_middle_point',

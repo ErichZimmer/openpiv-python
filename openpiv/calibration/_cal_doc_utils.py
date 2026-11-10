@@ -1,6 +1,9 @@
 from scipy._lib import doccer
 
-__all__ = ['docfiller']
+
+__all__ = [
+    'docfiller'
+]
 
 
 # typing the same doc string multiple times gets annoying and error prone...

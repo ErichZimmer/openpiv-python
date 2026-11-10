@@ -7,6 +7,7 @@ import numpy as np
 
 from .._epipolar_utils import _line_intersect, _multi_line_intersect
 
+
 __all__ = [
     'line_intersect',
     'multi_line_intersect'

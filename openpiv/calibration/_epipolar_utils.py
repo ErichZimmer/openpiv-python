@@ -8,6 +8,7 @@ from numpy.typing import DTypeLike
 
 from . import _cal_doc_utils
 
+
 __all__ = [
     'plot_epipolar_line'
 ]

@@ -4,6 +4,7 @@ from .. import _cal_doc_utils
 from .._target_grids import get_simple_grid
 from ._match_points import find_median_point, find_nearest_points
 
+
 __all__ = [
     'get_pairs_marching',
     'get_pairs_auto'

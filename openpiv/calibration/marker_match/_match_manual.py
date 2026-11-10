@@ -2,6 +2,7 @@ import numpy as np
 
 from .._camera import BaseCamera
 
+
 __all__ = [
     'get_pairs_proj'
 ]
