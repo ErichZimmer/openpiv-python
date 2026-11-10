@@ -36,8 +36,9 @@ def line_intersect(
     -------
     coords : np.ndarray
         The world coordinate that is nearest to the two rays intersecting.
-    dist : float
-        The minimum distance between the two rays.
+        Invalid point columns contain NaN.
+    dist : np.ndarray
+        The minimum distance between the two rays. Invalid points contain NaN.
 
     """
     cam_1._check_parameters()
@@ -90,10 +91,15 @@ def multi_line_intersect(
     -------
     coords : np.ndarray
         The world coordinate that is nearest to the intersection of all rays.
+        Invalid point columns contain NaN.
 
     """
     n_cams = len(cameras)
     n_imgs = len(img_points)
+
+    if n_cams < 2:
+        msg = 'Triangulation needs at least two cameras'
+        raise ValueError(msg)
 
     # make sure each camera has a set of images
     if n_cams != n_imgs:

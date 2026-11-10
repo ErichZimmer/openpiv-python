@@ -32,27 +32,35 @@ def line_intersect(
     -------
     coords : np.ndarray
         Midpoint between the closest points on each pair of backward
-        rays, with shape (3, N).
+        rays, with shape (3, N). Invalid point columns contain NaN.
     dist : np.ndarray
         Shortest separation between each pair of backward rays,
-        with shape (N,), in world-coordinate units.
+        with shape (N,), in world-coordinate units. Invalid points contain NaN.
 
     """
     cam_1._check_parameters()
     cam_2._check_parameters()
 
     if cam_1.dtype != cam_2.dtype:
-        raise ValueError(
-            "Dtypes between camera structures must match"
-        )
+        msg = 'Dtypes between camera structures must match'
+        raise ValueError(msg)
 
     img_points_1 = np.array(img_points_1, dtype=cam_1.dtype)
     img_points_2 = np.array(img_points_2, dtype=cam_2.dtype)
 
-    t1, r1 = cam_1._get_inverse_vector(img_points_1)
-    t2, r2 = cam_2._get_inverse_vector(img_points_2)
+    t1, r1 = cam_1._get_inverse_vector(
+        img_points_1
+    )
+    t2, r2 = cam_2._get_inverse_vector(
+        img_points_2
+    )
 
-    return _line_intersect(t1, r1, t2, r2)
+    return _line_intersect(
+        t1,
+        r1,
+        t2,
+        r2
+    )
 
 
 def _dFdx(
@@ -252,7 +260,27 @@ def _minimize_gradient(
     residual: np.ndarray,
     object_point: np.ndarray
 ):
-    object_point += np.linalg.lstsq(jac, -residual, rcond=None)[0]
+    if not np.all(np.isfinite(jac)) or not np.all(np.isfinite(residual)):
+        return np.full_like(object_point, np.nan)
+
+    try:
+        step, _, rank, _ = np.linalg.lstsq(
+            jac,
+            -residual,
+            rcond=None
+        )
+    except np.linalg.LinAlgError:
+        return np.full_like(object_point, np.nan)
+
+    expected_rank = jac.shape[1]
+
+    if rank < expected_rank:
+        return np.full_like(object_point, np.nan)
+
+    object_point += step
+
+    if not np.all(np.isfinite(object_point)):
+        object_point[:] = np.nan
 
     return object_point
 
@@ -264,7 +292,6 @@ def _refine_pos3D(
     iterations: int=1
 ):
     dtype = cams[0].dtype
-    n_cams = len(cams)
 
     # if a 1D array is given, extend it
     if len(object_points.shape) == 1:
@@ -278,30 +305,39 @@ def _refine_pos3D(
 
     new_object_points = np.zeros([3, n_points], dtype=dtype)
     new_object_points[:, :] = object_points
+    valid = np.all(np.isfinite(new_object_points), axis=0)
+    new_object_points[:, ~valid] = np.nan
 
     # TODO: I bet this loop is hellish slow for a large number of particles
     for _ in range(iterations):
+        valid = np.all(np.isfinite(new_object_points), axis=0)
+        indices = np.flatnonzero(valid)
+
+        if len(indices) == 0:
+            break
+
+        images = []
+
+        for image in image_points:
+            images.append(image[:, valid])
+
         jac = _refine_jac3D(
             cams,
-            new_object_points
+            new_object_points[:, valid]
         )
 
         residuals = _refine_func3D(
             cams,
-            new_object_points,
-            image_points,
+            new_object_points[:, valid],
+            images,
         )
 
-        for particle in range(n_points):
-            img_points = []
-            for cam in range(n_cams):
-                img_points.append(image_points[cam][:, particle])
-
+        for i, particle in enumerate(indices):
             obj_point = new_object_points[:, particle]
 
             new_object_points[:, particle] = _minimize_gradient(
-                jac[particle],
-                residuals[particle],
+                jac[i],
+                residuals[i],
                 obj_point
             ).T
 
@@ -313,24 +349,19 @@ def _estimate_pos(
     image_points: list
 ):
     dtype = cams[0].dtype
-    n_points = image_points[0].shape[1]
 
     lines = []
+
     for cam in range(len(cams)):
-        t, r = cams[cam]._get_inverse_vector(image_points[cam])
+        t, r = cams[cam]._get_inverse_vector(
+            image_points[cam]
+        )
         lines.append([t, r])
 
-    object_points = np.zeros([3, n_points], dtype=dtype)
-    for particle in range(n_points):
-        particle_lines = []
-        for cam in range(len(cams)):
-            particle_lines.append([
-                lines[cam][0][:, particle],
-                lines[cam][1][:, particle:particle+1].copy()
-            ])
-        object_points[:, particle] = _multi_line_intersect(particle_lines, dtype)[:, 0]
-
-    return object_points
+    return _multi_line_intersect(
+        lines,
+        dtype
+    )
 
 
 # Now the good part starts :)
@@ -364,6 +395,7 @@ def multi_line_intersect(
     -------
     coords : np.ndarray
         The world coordinate that minimizes all projection residuals.
+        Invalid point columns contain NaN and are skipped during refinement.
 
     References
     ----------
@@ -375,6 +407,14 @@ def multi_line_intersect(
     """
     n_cams = len(cameras)
     n_imgs = len(image_points)
+
+    if n_cams < 2:
+        msg = 'Triangulation needs at least two cameras'
+        raise ValueError(msg)
+
+    if not isinstance(iterations, (int, np.integer)) or iterations < 0:
+        msg = 'Iterations must be a nonnegative integer'
+        raise ValueError(msg)
 
     # make sure each camera has a set of images
     if n_cams != n_imgs:
@@ -394,22 +434,26 @@ def multi_line_intersect(
         if dtype1 != dtype2:
             raise ValueError('Dtypes between camera structures must match')
 
-    # TODO: we should also check for individual image mismatches
-    # if a 1D array is given, extend it
-    if len(image_points[0].shape) == 1:
-        for i in range(len(image_points)):
-            image_points[i] = image_points[i][:, np.newaxis]
+    images = []
+
+    for image in image_points:
+        coordinates = np.array(image, dtype=dtype1)
+
+        if coordinates.ndim == 1:
+            coordinates = coordinates[:, np.newaxis]
+
+        images.append(coordinates)
 
     object_points = _estimate_pos(
         cameras,
-        image_points
+        images
     )
 
     # Refine position using Soloff polynomial
     return _refine_pos3D(
         cameras,
         object_points,
-        image_points,
+        images,
         iterations=iterations
     )
 

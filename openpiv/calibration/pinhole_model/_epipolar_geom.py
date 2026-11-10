@@ -9,6 +9,36 @@ __all__ = [
 ]
 
 
+def _get_directions(
+    camera,
+    image_points: np.ndarray
+):
+    if image_points.shape == (2, 0):
+        return np.empty((3, 0), dtype=camera.dtype)
+
+    try:
+        return camera._get_inverse_vector(
+            image_points
+        )
+    except (np.linalg.LinAlgError, RuntimeError):
+        directions = np.full(
+            (3, image_points.shape[1]),
+            np.nan,
+            dtype=camera.dtype
+        )
+
+    # Retry points separately when a batch distortion inversion fails.
+    for i in range(image_points.shape[1]):
+        try:
+            directions[:, i:i+1] = camera._get_inverse_vector(
+                image_points[:, i:i+1]
+            )
+        except (np.linalg.LinAlgError, RuntimeError):
+            continue
+
+    return directions
+
+
 def line_intersect(
     cam_1: "pinhole_model.camera",
     cam_2: "pinhole_model.camera",
@@ -32,8 +62,9 @@ def line_intersect(
     -------
     coords : np.ndarray
         The world coordinate that is nearest to the two rays intersecting.
-    dist : float
-        The minimum distance between the two rays.
+        Invalid point columns contain NaN.
+    dist : np.ndarray
+        The minimum distance between the two rays. Invalid points contain NaN.
 
     Raises
     ------
@@ -41,11 +72,6 @@ def line_intersect(
         If camera parameters are invalid, camera dtypes do not match,
         or image coordinates cannot be converted to compatible arrays
         with two rows.
-    RuntimeError
-        If Brown distortion inversion fails when constructing the rays.
-    np.linalg.LinAlgError
-        If reversing tilt or solving a Brown inversion step encounters
-        a singular matrix.
 
     """
     cam_1._check_parameters()
@@ -61,11 +87,13 @@ def line_intersect(
     img_points_1 = np.array(img_points_1, dtype=dtype1)
     img_points_2 = np.array(img_points_2, dtype=dtype2)
 
-    r1 = cam_1._get_inverse_vector(
+    r1 = _get_directions(
+        cam_1,
         img_points_1
     )
 
-    r2 = cam_2._get_inverse_vector(
+    r2 = _get_directions(
+        cam_2,
         img_points_2
     )
 
@@ -107,33 +135,23 @@ def multi_line_intersect(
     -------
     coords : np.ndarray
         Triangulated world coordinates with shape (3, N).
+        Invalid point columns contain NaN and are skipped during refinement.
 
     Raises
     ------
     ValueError
         If fewer than two cameras are supplied, camera and image counts
         differ, camera parameters are invalid, camera dtypes do not
-        match, or image coordinates cannot be reshaped into two rows.
-    RuntimeError
-        If Brown distortion inversion fails when constructing the rays.
-    np.linalg.LinAlgError
-        If a least-squares solve fails to converge.
+        match, image coordinates have invalid shapes, or iterations is
+        not a nonnegative integer.
 
     """
     n_cameras = len(cameras)
+    n_images = len(img_points)
 
     if n_cameras < 2:
-        raise ValueError('Triangulation needs at least two cameras')
-
-    dtype = cameras[0].dtype
-    images = []
-
-    for image in img_points:
-        coordinates = np.asarray(image, dtype=dtype)
-        coordinates = coordinates.reshape(2, -1)
-        images.append(coordinates)
-
-    n_images = len(images)
+        msg = 'Triangulation needs at least two cameras'
+        raise ValueError(msg)
 
     if n_cameras != n_images:
         msg = (
@@ -141,6 +159,21 @@ def multi_line_intersect(
             f'{n_images} images'
         )
         raise ValueError(msg)
+
+    if not isinstance(iterations, (int, np.integer)) or iterations < 0:
+        msg = 'Iterations must be a nonnegative integer'
+        raise ValueError(msg)
+
+    dtype = cameras[0].dtype
+    images = []
+
+    for image in img_points:
+        coordinates = np.asarray(image, dtype=dtype)
+
+        if coordinates.ndim == 1:
+            coordinates = coordinates[:, np.newaxis]
+
+        images.append(coordinates)
 
     for camera in cameras:
         camera._check_parameters()
@@ -154,7 +187,8 @@ def multi_line_intersect(
 
     for camera, image in zip(cameras, images):
         points = np.array(image, dtype=dtype)
-        directions = camera._get_inverse_vector(
+        directions = _get_directions(
+            camera,
             points
         )
         origin = camera.translation
@@ -166,31 +200,58 @@ def multi_line_intersect(
         dtype
     )
 
-    n_points = object_points.shape[1]
     n_residuals = 2 * n_cameras
 
     # Like in the Soloff model, use Gauss-Newton to minimize remaining errors
     for _ in range(iterations):
+        valid = np.all(np.isfinite(object_points), axis=0)
+        indices = np.flatnonzero(valid)
+        n_points = len(indices)
+
+        if n_points == 0:
+            break
+
         # Each point has two residuals per camera and three unknowns.
         projection_jacobian = np.empty((n_points, n_residuals, 3))
         residual = np.empty((n_points, n_residuals))
 
         for i, camera in enumerate(cameras):
             projected, _, point_jacobian = camera.project_jacobian(
-                object_points
+                object_points[:, valid]
             )
             section = slice(2*i, 2*i+2)
-            pixel_residual = projected - images[i]
+            pixel_residual = projected - images[i][:, valid]
 
             projection_jacobian[:, section, :] = point_jacobian
             residual[:, section] = pixel_residual.T
 
-        for j in range(n_points):
-            step, _, _, _ = np.linalg.lstsq(
-                projection_jacobian[j],
-                -residual[j],
-                rcond=None
-            )
-            object_points[:, j] += step
+        for j, particle in enumerate(indices):
+            if (
+                not np.all(np.isfinite(projection_jacobian[j]))
+                or not np.all(np.isfinite(residual[j]))
+            ):
+                object_points[:, particle] = np.nan
+                continue
+
+            try:
+                step, _, rank, _ = np.linalg.lstsq(
+                    projection_jacobian[j],
+                    -residual[j],
+                    rcond=None
+                )
+            except np.linalg.LinAlgError:
+                object_points[:, particle] = np.nan
+                continue
+
+            expected_rank = projection_jacobian.shape[2]
+
+            if rank < expected_rank:
+                object_points[:, particle] = np.nan
+                continue
+
+            object_points[:, particle] += step
+
+            if not np.all(np.isfinite(object_points[:, particle])):
+                object_points[:, particle] = np.nan
 
     return object_points

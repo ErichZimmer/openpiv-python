@@ -112,8 +112,9 @@ def _line_intersect(
     -------
     coords : np.ndarray
         The world coordinate that is nearest to the two rays intersecting.
-    dist : float
-        The minimum distance between the two rays.
+        Invalid point columns contain NaN.
+    dist : np.ndarray
+        The minimum distance between the two rays. Invalid points contain NaN.
 
     Notes
     -----
@@ -129,6 +130,10 @@ def _line_intersect(
     )
 
     """
+    if r1.shape != r2.shape:
+        msg = 'Image point counts must match between cameras'
+        raise ValueError(msg)
+
     r1r2 = r1[0]*r2[0] + r1[1]*r2[1] + r1[2]*r2[2]
     r12 = r1[0]**2 + r1[1]**2 + r1[2]**2
     r22 = r2[0]**2 + r2[1]**2 + r2[2]**2
@@ -137,18 +142,35 @@ def _line_intersect(
     B = [r1[0]*dO[0] + r1[1]*dO[1] + r1[2]*dO[2],
          r2[0]*dO[0] + r2[1]*dO[1] + r2[2]*dO[2]]
 
-    # invert matrix to get coefficients a and b
-    try:
-        a = (-r22*B[0] + r1r2*B[1])/(r1r2**2 - r12 * r22)
-        b = (-r1r2*B[0] + r12*B[1])/(r1r2**2 - r12 * r22)
-    except Exception:
-        a, b = 0.0, 0.0
+    denominator = r1r2**2 - r12 * r22
+    tolerance = 3 * np.finfo(r1.dtype).eps * r12 * r22
+    valid = np.isfinite(denominator) & (np.abs(denominator) > tolerance)
+
+    a = np.full_like(denominator, np.nan)
+    b = np.full_like(denominator, np.nan)
+
+    np.divide(
+        -r22*B[0] + r1r2*B[1],
+        denominator,
+        out=a,
+        where=valid
+    )
+    np.divide(
+        -r1r2*B[0] + r12*B[1],
+        denominator,
+        out=b,
+        where=valid
+    )
 
     # now use a and b to calculate the minimum distance
     l1 = t1 + a*r1 # line 1
     l2 = t2 + b*r2 # line 2
     dist = sum((l1 - l2)**2)**0.5 # minimum distance
     coords = (l1 + l2)*0.5 # coordinate location
+
+    valid &= np.all(np.isfinite(coords), axis=0) & np.isfinite(dist)
+    coords = np.where(valid, coords, np.nan)
+    dist = np.where(valid, dist, np.nan)
 
     return coords, dist
 
@@ -172,6 +194,7 @@ def _multi_line_intersect(
     -------
     coords : np.ndarray
         The world coordinate that is nearest to the intersection of all rays.
+        Invalid point columns contain NaN.
 
     Examples
     --------
@@ -184,31 +207,55 @@ def _multi_line_intersect(
     )
 
     """
-    # make sure that the direction vector array is 2D
-    assert(len(lines[0][1].shape) == 2)
-
     n_cams = len(lines)
+
+    if n_cams < 2:
+        msg = 'Triangulation needs at least two cameras'
+        raise ValueError(msg)
+
+    if lines[0][1].ndim != 2 or lines[0][1].shape[0] != 3:
+        msg = 'Ray directions must have shape (3, N)'
+        raise ValueError(msg)
+
     n_points = lines[0][1].shape[1]
+
+    for _, directions in lines:
+        if directions.shape != (3, n_points):
+            msg = 'Ray directions must have matching shape (3, N)'
+            raise ValueError(msg)
 
     A = np.zeros([3,3], dtype=dtype)
     b = np.zeros(3, dtype=dtype)
 
-    I = np.eye(3)
+    I = np.eye(3, dtype=dtype)
 
-    object_points = np.zeros([3, n_points], dtype=dtype)
+    object_points = np.full([3, n_points], np.nan, dtype=dtype)
 
     # TODO: Optimize this loop as python loops would be slow if we had
     # 100,000 particles to iterate
     for particle in range(n_points):
         A[:, :] = 0.0
         b[:] = 0.0
+        valid = True
 
         for cam in range(n_cams):
             t = lines[cam][0]
             r = lines[cam][1][:, particle]
 
-            # This was very important, didn't work without it
-            r /= np.linalg.norm(r)
+            if t.ndim == 2:
+                t = t[:, particle]
+
+            if not np.all(np.isfinite(t)) or not np.all(np.isfinite(r)):
+                valid = False
+                break
+
+            norm = np.linalg.norm(r)
+
+            if not np.isfinite(norm) or norm == 0:
+                valid = False
+                break
+
+            r = r / norm
 
             temp = I - np.outer(r, r)
 
@@ -216,6 +263,23 @@ def _multi_line_intersect(
             A += temp
             b += temp.dot(t)
 
-        object_points[:, particle] = np.linalg.lstsq(A, b, rcond=None)[0]
+        if not valid or not np.all(np.isfinite(b)):
+            continue
+
+        try:
+            point, _, rank, _ = np.linalg.lstsq(
+                A,
+                b,
+                rcond=None
+            )
+        except np.linalg.LinAlgError:
+            continue
+
+        expected_rank = A.shape[1]
+
+        if rank < expected_rank or not np.all(np.isfinite(point)):
+            continue
+
+        object_points[:, particle] = point
 
     return object_points
