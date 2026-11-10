@@ -19,7 +19,7 @@ file = os.path.join(os.path.dirname(__file__),"test_calibration_points.npz")
 @pytest.mark.parametrize("args", ((), ("name",)))
 def test_required_parameters_input(args):
     with pytest.raises(TypeError):
-        poly_model.camera(*args)
+        poly_model.PolyCamera(*args)
 
 
 @pytest.mark.parametrize("parameters", [
@@ -38,11 +38,11 @@ def test_parameters_input(parameters):
     kwargs = {"name": "name", "resolution": [0, 0]}
     kwargs.update(parameters)
     with pytest.raises(ValueError):
-        poly_model.camera(**kwargs)
+        poly_model.PolyCamera(**kwargs)
 
 
 def test_parameters_initialization():
-    cam = poly_model.camera(
+    cam = poly_model.PolyCamera(
         "name",
         resolution=[0, 0]
     )
@@ -83,7 +83,7 @@ def test_minimization_01(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = poly_model.camera(
+    cam = poly_model.PolyCamera(
         "poly",
         resolution = [512, 512],
     )
@@ -111,7 +111,7 @@ def test_projection_01(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = poly_model.camera(
+    cam = poly_model.PolyCamera(
         "poly",
         resolution = [512, 512],
     )
@@ -153,7 +153,7 @@ def test_projection_02(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = poly_model.camera(
+    cam = poly_model.PolyCamera(
         "poly",
         resolution = [512, 512],
     )
@@ -187,7 +187,7 @@ def test_projection_03(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = poly_model.camera(
+    cam = poly_model.PolyCamera(
         "poly",
         resolution = [512, 512],
     )
@@ -232,7 +232,7 @@ def test_line_intersect_01(
 
     cams = []
     for cam in range(n_cams):
-        cam_1 = poly_model.camera(
+        cam_1 = poly_model.PolyCamera(
             "dummy",
             resolution = [512, 512]
         )
@@ -277,7 +277,7 @@ def test_line_intersect_01(
 
 
 def test_save_parameters_1():
-    cam = poly_model.camera(
+    cam = poly_model.PolyCamera(
         "dummy",
         resolution = [512, 512]
     )
@@ -288,7 +288,7 @@ def test_save_parameters_1():
 
 
 def test_save_parameters_2():
-    cam = poly_model.camera(
+    cam = poly_model.PolyCamera(
         "dummy",
         resolution = [512, 512]
     )
@@ -300,7 +300,7 @@ def test_save_parameters_2():
 
 
 def test_load_parameters_1():
-    cam = poly_model.camera(
+    cam = poly_model.PolyCamera(
         "dummy",
         resolution = [512, 512]
     )
@@ -313,14 +313,14 @@ def test_load_parameters_1():
 
 
 def test_load_parameters_2():
-    cam_orig = poly_model.camera(
+    cam_orig = poly_model.PolyCamera(
         "dummy",
         resolution = [512, 512],
         poly_iw_o = np.arange(20, dtype="float64").reshape(10, 2),
         poly_iw_v = np.arange(20, 40, dtype="float64").reshape(10, 2)
     )
 
-    cam_new = poly_model.camera(
+    cam_new = poly_model.PolyCamera(
         "dummy",
         resolution = [512, 512]
     )

@@ -14,7 +14,7 @@ def _get_stereo_cams():
     for case in (1, 2):
         obj = cal[f"obj_points_{case}"]
         img = cal[f"img_points_{case}"]
-        cam = poly_model.camera("cam", resolution=[512, 512])
+        cam = poly_model.PolyCamera("cam", resolution=[512, 512])
         cam.minimize_params(obj, img)
         cams.append(cam)
     return cams

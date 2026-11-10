@@ -61,15 +61,15 @@ def make_camera(model: str, name: str, resolution: tuple[int, int]) -> Any:
     if model == "poly":
         from openpiv.calibration import poly_model
 
-        return poly_model.camera(name, resolution=resolution)
+        return poly_model.PolyCamera(name, resolution=resolution)
     if model == "dlt":
         from openpiv.calibration import dlt_model
 
-        return dlt_model.camera(name, resolution=resolution)
+        return dlt_model.DLTCamera(name, resolution=resolution)
     if model == "pinhole":
         from openpiv.calibration import pinhole_model
 
-        return pinhole_model.camera(name, resolution=resolution)
+        return pinhole_model.PinCam(name, resolution=resolution)
     raise ValueError(f"unknown camera model {model!r}")
 
 

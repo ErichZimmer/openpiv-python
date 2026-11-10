@@ -257,7 +257,7 @@ def test_board_rank_matches_complete_jacobian(
 
 
 def test_full_brown_initial_rank_deficiency_is_not_rejected():
-    cam = pinhole_model.camera(
+    cam = pinhole_model.PinCam(
         'full',
         (1280, 960),
         translation=[0, 0, 0],

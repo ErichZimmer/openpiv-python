@@ -47,7 +47,7 @@ def get_test_camera_params(
         line = f.readline()[:]
         principal = [float(num) for num in line.split()]
 
-    return pinhole_model.camera(
+    return pinhole_model.PinCam(
         name = name,
         resolution = resolution,
         translation = translation,
@@ -65,7 +65,7 @@ def get_test_camera_params(
 @pytest.mark.parametrize("args", ((), ("name",)))
 def test_required_parameters_input(args):
     with pytest.raises(TypeError):
-        pinhole_model.camera(*args)
+        pinhole_model.PinCam(*args)
 
 
 @pytest.mark.parametrize("parameters", [
@@ -88,7 +88,7 @@ def test_parameters_input(parameters):
     kwargs = {"name": "name", "resolution": [0, 0]}
     kwargs.update(parameters)
     with pytest.raises(ValueError):
-        pinhole_model.camera(**kwargs)
+        pinhole_model.PinCam(**kwargs)
 
 
 @pytest.mark.parametrize("model", ("reduced", "full"))
@@ -99,7 +99,7 @@ def test_parameters_initialization(
     tilt: bool,
     dtype
 ):
-    cam = pinhole_model.camera(
+    cam = pinhole_model.PinCam(
             "name",
             resolution=[512, 512],
             distortion_model=model,
@@ -160,7 +160,7 @@ def test_parameters_initialization(
 
 
 def test_rotation_matrix_01():
-    cam = pinhole_model.camera(
+    cam = pinhole_model.PinCam(
         "name",
         resolution = [1024, 1024]
     )
@@ -172,7 +172,7 @@ def test_rotation_matrix_01():
 
 
 def test_rotation_matrix_02():
-    cam = pinhole_model.camera(
+    cam = pinhole_model.PinCam(
         "name",
         resolution = [1024, 1024],
         translation = [0, 0, 1],
@@ -193,7 +193,7 @@ def test_projection_01(
     tilt: bool,
     correct_distortion: bool
 ):
-    cam = pinhole_model.camera(
+    cam = pinhole_model.PinCam(
         "name",
         resolution = [1024, 1024],
         translation = [0, 0, 500],
@@ -351,7 +351,7 @@ def test_minimization_01(
     cal_obj_points = cal_data["obj_points_1"]
     cal_img_points = cal_data["img_points_1"]
 
-    cam = pinhole_model.camera(
+    cam = pinhole_model.PinCam(
         "minimized",
         resolution = [512, 512],
         translation = [1, 1, 520], # initial guess
@@ -389,7 +389,7 @@ def test_minimization_02(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam_new = pinhole_model.camera(
+    cam_new = pinhole_model.PinCam(
         "minimized",
         resolution = [512, 512],
         translation = [-20, 20, 520], # initial guess
@@ -552,7 +552,7 @@ def test_save_parameters_2(
 ):
 
     if default:
-        cam = pinhole_model.camera(
+        cam = pinhole_model.PinCam(
             "dummy",
             resolution = [512, 512]
         )
@@ -565,7 +565,7 @@ def test_save_parameters_2(
 
 
 def test_load_parameters_1(tmp_path):
-    cam = pinhole_model.camera(
+    cam = pinhole_model.PinCam(
         "dummy",
         resolution = [512, 512]
     )
@@ -599,7 +599,7 @@ def test_load_parameters_2(
         "dummy"
     )
 
-    cam_new = pinhole_model.camera(
+    cam_new = pinhole_model.PinCam(
         "dummy",
         resolution = [512, 512]
     )

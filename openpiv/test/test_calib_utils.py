@@ -24,7 +24,7 @@ def get_camera_instance():
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512],
     )

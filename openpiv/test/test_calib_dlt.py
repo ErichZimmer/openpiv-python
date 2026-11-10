@@ -19,42 +19,42 @@ file = os.path.join(os.path.dirname(__file__),"test_calibration_points.npz")
 def test_parameters_input():
     with pytest.raises(TypeError):
          # missing camera name
-        dlt_model.camera()
+        dlt_model.DLTCamera()
 
         # missing resolution
-        dlt_model.camera(
+        dlt_model.DLTCamera(
             "name"
         )
 
     with pytest.raises(ValueError):
         # name is not a string
-        dlt_model.camera(
+        dlt_model.DLTCamera(
             0,
             resolution=[0, 0]
         )
 
         # not two element tuple
-        dlt_model.camera(
+        dlt_model.DLTCamera(
             "name",
             resolution=[0]
         )
 
         # not 2D or 3D
-        dlt_model.camera(
+        dlt_model.DLTCamera(
             "name",
             resolution=[0, 0],
             ndim = 4
         )
 
         # coefficients not correct dimension
-        dlt_model.camera(
+        dlt_model.DLTCamera(
             "name",
             resolution=[0, 0],
             coeffs = np.zeros((10, 10, 2))
         )
 
         # coefficients not correct shape
-        dlt_model.camera(
+        dlt_model.DLTCamera(
             "name",
             resolution=[0, 0],
             coeffs = np.zeros((10, 10))
@@ -62,7 +62,7 @@ def test_parameters_input():
 
 
 def test_parameters_initialization():
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
             "name",
             resolution=[0, 0]
         )
@@ -88,7 +88,7 @@ def test_minimization_01(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512],
     )
@@ -116,7 +116,7 @@ def test_projection_01(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512],
     )
@@ -158,7 +158,7 @@ def test_projection_02(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512],
     )
@@ -192,7 +192,7 @@ def test_projection_03(
     cal_obj_points = cal_data[f"obj_points_{case}"]
     cal_img_points = cal_data[f"img_points_{case}"]
 
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512],
     )
@@ -234,12 +234,12 @@ def test_line_intersect_01(
     cal_obj_points_2 = cal_data[f"obj_points_{case[1]}"]
     cal_img_points_2 = cal_data[f"img_points_{case[1]}"]
 
-    cam_1 = dlt_model.camera(
+    cam_1 = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512]
     )
 
-    cam_2 = dlt_model.camera(
+    cam_2 = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512]
     )
@@ -303,7 +303,7 @@ def test_line_intersect_02(
 
     cams = []
     for cam in range(n_cams):
-        cam_1 = dlt_model.camera(
+        cam_1 = dlt_model.DLTCamera(
             "dummy",
             resolution = [512, 512]
         )
@@ -348,7 +348,7 @@ def test_line_intersect_02(
 
 
 def test_save_parameters_1():
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512]
     )
@@ -359,7 +359,7 @@ def test_save_parameters_1():
 
 
 def test_save_parameters_2():
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512]
     )
@@ -370,7 +370,7 @@ def test_save_parameters_2():
 
 
 def test_load_parameters_1():
-    cam = dlt_model.camera(
+    cam = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512]
     )
@@ -383,12 +383,12 @@ def test_load_parameters_1():
 
 
 def test_load_parameters_2():
-    cam_orig = dlt_model.camera(
+    cam_orig = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512]
     )
 
-    cam_new = dlt_model.camera(
+    cam_new = dlt_model.DLTCamera(
         "dummy",
         resolution = [512, 512]
     )
