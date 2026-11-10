@@ -304,11 +304,57 @@ def bundle_adjust(
     Notes
     -----
     When performing camera calibration of a PIV imaging system using
-    bundle adjustment on planes of unkown origins, it is highly recommended
-    that either the first frame or the last frame contains the plane that
-    sets the origin of the system. Without this alignment plane, regular
-    Tomo-PIV and associated reconstruction algorithms will fail as there is
-    no set origin in the system.
+    bundle adjustment on planes of unkown origins, it is highly, highly,
+    recommended that either the first frame or the last frame contains the
+    plane that sets the origin of the system. Without this alignment plane,
+    regular Tomo-PIV and associated reconstruction algorithms will fail as
+    there is no set origin in the system.
+
+    The implementation of the bundle adjustment algorithm is based on a
+    square-root Levenberg-Marquardt formulation with initialization from
+    Zhang's method [Zhang2000Bundle]_. Zhang's method estimates camera
+    intrinsics and each board capture's translation and rotation.
+    By holding one camera's pose fixed as a reference, the camera
+    parameters and global board poses can be refined using reprojection
+    errors and a bundle adjustment algorithm as described by Triggs et al.
+    [Triggs2000Bundle]_.
+
+    Typically, bundle adjustment algorithms use some form of Schur
+    elimination, such as that described by Lourakis and Argyros
+    [Lourakis2009Bundle]_. For this implementation, each capture's
+    six-parameter board-pose block can be eliminated from the damped normal
+    equations during Levenberg-Marquardt optimization. However, since normal
+    equations square the Jacobian's condition number, which increases
+    sensitivity to floating-point errors, a QR-based formulation that
+    eliminates the board-pose increments directly from the augmented
+    Jacobian was implemented based on the work of Demmel et al.
+    [Demmel2021Bundle]_. This avoids forming normal equations and the
+    associated loss of numerical accuracy. As in Schur-based implementations,
+    the reduced camera system is solved first, and back-substitution is used
+    to recover the board-pose updates.
+
+    References
+    ----------
+    .. [Zhang2000Bundle] Zhang, Z. (2000). A flexible new technique for
+    camera calibration. IEEE Transactions on Pattern Analysis and
+    Machine Intelligence, 22(11), 1330-1334.
+    https://doi.org/10.1109/34.888718
+
+    .. [Triggs2000Bundle] Triggs, B., McLauchlan, P. F., Hartley, R. I.,
+    and Fitzgibbon, A. W. (2000). Bundle adjustment - A modern synthesis.
+    Vision Algorithms: Theory and Practice, 298-372.
+    https://doi.org/10.1007/3-540-44480-7_21
+
+    .. [Lourakis2009Bundle] Lourakis, M. I. A., and Argyros, A. A. (2009).
+    SBA: A software package for generic sparse bundle adjustment.
+    ACM Transactions on Mathematical Software, 36(1), Article 2.
+    https://doi.org/10.1145/1486525.1486527
+
+    .. [Demmel2021Bundle] Demmel, N., Sommer, C., Cremers, D., and
+    Usenko, V. (2021). Square Root Bundle Adjustment for Large-Scale
+    Reconstruction. Proceedings of the IEEE/CVF Conference on Computer
+    Vision and Pattern Recognition, 11723-11732.
+    https://doi.org/10.1109/CVPR46437.2021.01155
 
     """
     points = _board_points(object_points)
