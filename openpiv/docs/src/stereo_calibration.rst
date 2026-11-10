@@ -19,7 +19,7 @@ Calibration = the projection function
 --------------------------------------
 
 Calibration gives, per camera, a world → image map :math:`F`
-(:meth:`camera.project_points <openpiv.calibration.poly_model.camera>`,
+(:meth:`PolyCamera.project_points <openpiv.calibration.poly_model.PolyCamera>`,
 here a Soloff 3rd-order polynomial):
 
 .. math::
@@ -66,7 +66,7 @@ Workflow
 --------
 
 1. Calibrate both cameras from a dual-plane target
-   (``poly_model.camera(...).minimize_params(obj_xyz, img_xy)``).
+   (``poly_model.PolyCamera(...).minimize_params(obj_xyz, img_xy)``).
 2. Build the common world grid at the sheet plane and dewarp
    (``get_common_world_grid`` → ``get_dewarp_mapping`` → ``dewarp_image``).
 3. Per frame pair: estimate disparity :math:`D = R - L` on the dewarped
