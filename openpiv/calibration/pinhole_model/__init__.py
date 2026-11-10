@@ -17,7 +17,7 @@ Functions
 =========
 calibrate_intrinsics - Calculate the intrinsic parameters using Zhang's algorithm
 
-camera - Create an instance of a Pinhole camera model
+PinCam - Create an instance of a Pinhole camera model
 
 calibrate_zhang - Initialize and refine planar-target calibration
 

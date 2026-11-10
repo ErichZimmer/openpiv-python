@@ -40,8 +40,8 @@ def _get_directions(
 
 
 def line_intersect(
-    cam_1: "pinhole_model.camera",
-    cam_2: "pinhole_model.camera",
+    cam_1: "pinhole_model.PinCam",
+    cam_2: "pinhole_model.PinCam",
     img_points_1: np.ndarray,
     img_points_2: np.ndarray
 ):
@@ -53,7 +53,7 @@ def line_intersect(
 
     Parameters
     ----------
-    cam_1, cam_2 : pinhole_model.camera
+    cam_1, cam_2 : pinhole_model.PinCam
         An instance of a Pinhole camera.
     img_points_1, img_points_2 : np.ndarray
         Image coordinates stored in a ndarray structured like [x, y]'.
@@ -121,7 +121,7 @@ def multi_line_intersect(
 
     Parameters
     ----------
-    cameras : list of pinhole_model.camera
+    cameras : list of pinhole_model.PinCam
         Cameras observing the points. All cameras must use the same dtype.
     img_points : list of np.ndarray
         Image coordinates for each camera, with shape (2, N) per array.

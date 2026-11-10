@@ -11,7 +11,7 @@ that of pinhole and polynomial calibration methods.
 
 Functions
 =========
-camera - Create an instance of a DLT camera model
+DLTCamera - Create an instance of a DLT camera model
 
 calibrate_dlt - Calibrate and return DLT coefficients and fitting error
 

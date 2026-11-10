@@ -13,7 +13,7 @@ limit artifacts from extrapolation.
 
 Functions
 =========
-camera - Create an instance of a Soloff camera model
+PolyCamera - Create an instance of a Soloff camera model
 
 line_intersect - Using two lines, locate where those lines intersect
 

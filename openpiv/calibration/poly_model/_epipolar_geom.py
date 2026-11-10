@@ -14,8 +14,8 @@ __all__ = [
 
 
 def line_intersect(
-    cam_1: "poly_model.camera",
-    cam_2: "poly_model.camera",
+    cam_1: "poly_model.PolyCamera",
+    cam_2: "poly_model.PolyCamera",
     img_points_1: np.ndarray,
     img_points_2: np.ndarray
 ):
@@ -23,7 +23,7 @@ def line_intersect(
 
     Parameters
     ----------
-    cam_1, cam_2 : poly_model.camera
+    cam_1, cam_2 : poly_model.PolyCamera
         Calibrated polynomial cameras with matching dtypes.
     img_points_1, img_points_2 : np.ndarray
         Corresponding image coordinates with shape (2, N).
@@ -70,7 +70,7 @@ def line_intersect(
 
 
 def _dFdx(
-    cam: "poly_model.camera",
+    cam: "poly_model.PolyCamera",
     object_points: np.ndarray
 ) -> np.ndarray:
     dtype = cam.dtype
@@ -113,7 +113,7 @@ def _dFdx(
 
 
 def _dFdy(
-    cam: "poly_model.camera",
+    cam: "poly_model.PolyCamera",
     object_points: np.ndarray
 ) -> np.ndarray:
     dtype = cam.dtype
@@ -156,7 +156,7 @@ def _dFdy(
 
 
 def _dFdz(
-    cam: "poly_model.camera",
+    cam: "poly_model.PolyCamera",
     object_points: np.ndarray
 ) -> np.ndarray:
     dtype = cam.dtype

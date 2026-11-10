@@ -10,11 +10,11 @@ from ._utils import _load_parameters, _save_parameters
 
 
 __all__ = [
-    'camera'
+    'PolyCamera'
 ]
 
 
-class camera(BaseCamera):
+class PolyCamera(BaseCamera):
     """An instance of a polynomial camera model.
 
     Create an instance of a polynomial camera. The polynomial camera model

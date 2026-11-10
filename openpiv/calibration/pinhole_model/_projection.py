@@ -67,7 +67,7 @@ def _project_points(
     Examples
     --------
     >>> from openpiv.calibration import pinhole_model
-    >>> cam = pinhole_model.camera(
+    >>> cam = pinhole_model.PinCam(
     ...     'camera0',
     ...     (640, 480),
     ...     translation=[0, 0, 0],
@@ -161,7 +161,7 @@ def _project_to_z(
     Examples
     --------
     >>> from openpiv.calibration import pinhole_model
-    >>> cam = pinhole_model.camera(
+    >>> cam = pinhole_model.PinCam(
     ...     'camera0',
     ...     (640, 480),
     ...     translation=[0, 0, 0],

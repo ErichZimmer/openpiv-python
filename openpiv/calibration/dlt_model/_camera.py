@@ -10,11 +10,11 @@ from ._utils import _load_parameters, _save_parameters
 
 
 __all__ = [
-    'camera'
+    'DLTCamera'
 ]
 
 
-class camera(BaseCamera):
+class DLTCamera(BaseCamera):
     """An instance of a DLT camera model.
 
     Create an instance of a DLT camera. The DLT camera model is based on

@@ -14,8 +14,8 @@ __all__ = [
 
 
 def line_intersect(
-    cam_1: "dlt_model.camera",
-    cam_2: "dlt_model.camera",
+    cam_1: "dlt_model.DLTCamera",
+    cam_2: "dlt_model.DLTCamera",
     img_points_1: np.ndarray,
     img_points_2: np.ndarray
 ):

@@ -493,7 +493,7 @@ def reconstruct_3c(
 
 def _dlt_init(cams: list, pts: list, dtype: DTypeLike = np.float64):
     try:
-        from .dlt_model import camera as dlt_camera
+        from .dlt_model import DLTCamera
         from .dlt_model import multi_line_intersect as dlt_multi
 
         dlt_cams = []
@@ -502,7 +502,7 @@ def _dlt_init(cams: list, pts: list, dtype: DTypeLike = np.float64):
                 dlt_cams.append(c)
             elif hasattr(c, "dlt"):  # poly carries a DLT estimator
                 dlt_cams.append(
-                    dlt_camera(
+                    DLTCamera(
                         "dlt-init", 
                         resolution=c.resolution,
                         coeffs=np.asarray(c.dlt), 

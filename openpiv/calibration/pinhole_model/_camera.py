@@ -17,11 +17,11 @@ from ._utils import _get_rotation_matrix, _load_parameters, _save_parameters
 
 
 __all__ = [
-    'camera'
+    'PinCam'
 ]
 
 
-class camera(BaseCamera):
+class PinCam(BaseCamera):
     """A pinhole camera with Brown distortion and optional sensor tilt.
 
     .. rubric:: Methods

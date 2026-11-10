@@ -351,7 +351,7 @@ def calibrate_zhang(
 
     Parameters
     ----------
-    cam : pinhole_model.camera
+    cam : pinhole_model.PinCam
         Camera to update. Its reduced/full distortion setting and tilt
         flag select the coefficients fitted during nonlinear refinement.
     object_points : np.ndarray

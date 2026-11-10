@@ -127,7 +127,7 @@ def get_reprojection_error(
     >>> obj_points = np.array([obj_x[0:3], obj_y[0:3], obj_z[0:3]], dtype=np.float64)
     >>> img_points = np.array([img_x[0:3], img_y[0:3]], dtype=np.float64)
 
-    >>> cam = dlt_model.camera(
+    >>> cam = dlt_model.DLTCamera(
         'cam1',
         [4512, 800]
     )
@@ -194,7 +194,7 @@ def get_los_error(
     >>> obj_points = np.array([obj_x[0:3], obj_y[0:3], obj_z[0:3]], dtype=np.float64)
     >>> img_points = np.array([img_x[0:3], img_y[0:3]], dtype=np.float64)
 
-    >>> cam = dlt_model.camera(
+    >>> cam = dlt_model.DLTCamera(
         'cam1',
         [4512, 800]
     )
@@ -294,7 +294,7 @@ def get_image_mapping(
     >>> obj_points = np.array([obj_x[0:3], obj_y[0:3], obj_z[0:3]], dtype=np.float64)
     >>> img_points = np.array([img_x[0:3], img_y[0:3]], dtype=np.float64)
 
-    >>> cam = dlt_model.camera(
+    >>> cam = dlt_model.DLTCamera(
         'cam1',
         [4512, 800]
     )

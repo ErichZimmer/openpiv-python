@@ -8,7 +8,7 @@ system.
 
 DLT Model
 =========
-camera - Create an instance of a DLT camera model
+DLTCamera - Create an instance of a DLT camera model
 
 calibrate_dlt - Calibrate and return DLT coefficients and fitting error
 
@@ -20,7 +20,7 @@ Pinhole Model
 =============
 calibrate_intrinsics - Calculate the intrinsic parameters using Zhang's algorithm
 
-camera - Create an instance of a Pinhole camera model
+PinCam - Create an instance of a Pinhole camera model
 
 calibrate_zhang - Initialize and refine planar-target calibration
 
@@ -34,7 +34,7 @@ multi_line_intersect - Using multiple lines, approximate their intersection
 
 Polynomial Model
 ================
-camera - Create an instance of a Soloff camera model
+PolyCamera - Create an instance of a Soloff camera model
 
 line_intersect - Using two lines, locate where those lines intersect
 
