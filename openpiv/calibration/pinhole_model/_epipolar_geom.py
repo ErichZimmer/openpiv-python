@@ -70,8 +70,7 @@ def line_intersect(
     ------
     ValueError
         If camera parameters are invalid, camera dtypes do not match,
-        or image coordinates cannot be converted to compatible arrays
-        with two rows.
+        or image coordinates are non-finite or have incompatible shapes.
 
     """
     cam_1._check_parameters()
@@ -142,8 +141,8 @@ def multi_line_intersect(
     ValueError
         If fewer than two cameras are supplied, camera and image counts
         differ, camera parameters are invalid, camera dtypes do not
-        match, image coordinates have invalid shapes, or iterations is
-        not a nonnegative integer.
+        match, image coordinates are non-finite or have incompatible
+        shapes, or iterations is not a nonnegative integer.
 
     """
     n_cameras = len(cameras)

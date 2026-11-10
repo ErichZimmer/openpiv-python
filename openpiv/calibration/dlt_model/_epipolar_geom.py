@@ -40,6 +40,15 @@ def line_intersect(
     dist : np.ndarray
         The minimum distance between the two rays. Invalid points contain NaN.
 
+    Raises
+    ------
+    ValueError
+        If camera parameters are invalid, camera dtypes do not match,
+        image coordinates are non-finite or have incompatible shapes,
+        or DLT coefficients do not have shape (3, 4).
+    np.linalg.LinAlgError
+        If the DLT matrix used to construct the rays is singular.
+
     """
     cam_1._check_parameters()
     cam_2._check_parameters()
@@ -92,6 +101,16 @@ def multi_line_intersect(
     coords : np.ndarray
         The world coordinate that is nearest to the intersection of all rays.
         Invalid point columns contain NaN.
+
+    Raises
+    ------
+    ValueError
+        If fewer than two cameras are supplied, camera and image counts
+        differ, camera parameters are invalid, camera dtypes do not
+        match, image coordinates are non-finite or have incompatible
+        shapes, or DLT coefficients do not have shape (3, 4).
+    np.linalg.LinAlgError
+        If a DLT matrix used to construct the rays is singular.
 
     """
     n_cams = len(cameras)

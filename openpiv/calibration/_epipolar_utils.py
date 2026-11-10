@@ -116,6 +116,11 @@ def _line_intersect(
     dist : np.ndarray
         The minimum distance between the two rays. Invalid points contain NaN.
 
+    Raises
+    ------
+    ValueError
+        If the ray direction arrays have different shapes.
+
     Notes
     -----
     Function taken from MyPTV; all rights reserved. The direct link to this
@@ -195,6 +200,12 @@ def _multi_line_intersect(
     coords : np.ndarray
         The world coordinate that is nearest to the intersection of all rays.
         Invalid point columns contain NaN.
+
+    Raises
+    ------
+    ValueError
+        If fewer than two rays are supplied, ray directions do not have
+        shape (3, N), or point counts differ between the ray arrays.
 
     Examples
     --------

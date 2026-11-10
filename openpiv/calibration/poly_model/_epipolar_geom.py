@@ -37,6 +37,12 @@ def line_intersect(
         Shortest separation between each pair of backward rays,
         with shape (N,), in world-coordinate units. Invalid points contain NaN.
 
+    Raises
+    ------
+    ValueError
+        If camera parameters are invalid, camera dtypes do not match,
+        or image coordinates are non-finite or have incompatible shapes.
+
     """
     cam_1._check_parameters()
     cam_2._check_parameters()
@@ -396,6 +402,14 @@ def multi_line_intersect(
     coords : np.ndarray
         The world coordinate that minimizes all projection residuals.
         Invalid point columns contain NaN and are skipped during refinement.
+
+    Raises
+    ------
+    ValueError
+        If fewer than two cameras are supplied, camera and image counts
+        differ, camera parameters are invalid, camera dtypes do not
+        match, image coordinates are non-finite or have incompatible
+        shapes, or iterations is not a nonnegative integer.
 
     References
     ----------
