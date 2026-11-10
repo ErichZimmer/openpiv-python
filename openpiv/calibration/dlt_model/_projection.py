@@ -67,14 +67,27 @@ def _project_points(
     dtype = self.dtype
     H = self.coeffs
 
-    object_points = np.array(object_points, dtype=dtype)
+    object_points = np.array(
+        object_points,
+        dtype=dtype
+    )
 
     ndim = H.shape[1] - 1
 
     if ndim == 2:
-        object_points = object_points[:2, :]
+        if object_points.ndim != 2 or object_points.shape[0] not in (2, 3):
+            msg = 'Object points must have shape (2, N) or (3, N)'
+            raise ValueError(msg)
     else:
-        object_points = object_points[:3, :]
+        if object_points.ndim != 2 or object_points.shape[0] != 3:
+            msg = 'Object points must have shape (3, N)'
+            raise ValueError(msg)
+
+    if not np.all(np.isfinite(object_points)):
+        msg = 'Object points must contain only finite values'
+        raise ValueError(msg)
+
+    object_points = object_points[:ndim, :]
 
     # compute RMSE error
     xy = np.dot(
@@ -124,6 +137,19 @@ def _get_inverse_vector(
              f'{p.shape}'
         raise ValueError(msg)
 
+    image_points = np.array(
+        image_points,
+        dtype=dtype
+    )
+
+    if image_points.ndim != 2 or image_points.shape[0] != 2:
+        msg = 'Image points must have shape (2, N)'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(image_points)):
+        msg = 'Image points must contain only finite values'
+        raise ValueError(msg)
+
     m = p[:, :3]
     t_un = p[:, 3]
     m_inv = np.linalg.inv(m)
@@ -141,7 +167,7 @@ def _get_inverse_vector(
 def _project_to_z(
     self,
     image_points: np.ndarray,
-    z: np.ndarray
+    z: float | np.ndarray
 ):
     """Project image points to world points.
 
@@ -217,11 +243,23 @@ def _project_to_z(
 
     dtype = self.dtype
 
-    image_points = np.array(image_points, dtype=dtype)
-
     t, r = self._get_inverse_vector(
         image_points
     )
+
+    z = np.array(
+        z,
+        dtype=dtype
+    )
+    n_points = r.shape[1]
+
+    if z.ndim > 1 or (z.ndim == 1 and z.size not in (1, n_points)):
+        msg = 'Z must be a scalar or a 1D array matching the image points'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(z)):
+        msg = 'Z must contain only finite values'
+        raise ValueError(msg)
 
     tx, ty, tz = t
     dx, dy, dz = r

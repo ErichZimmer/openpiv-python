@@ -93,8 +93,21 @@ def _get_inverse_vector(
 ):
     self._get_rotation_matrix()
 
-    image_points = np.array(image_points, dtype=self.dtype)
-    image_points = image_points.reshape(2, -1)
+    dtype = self.dtype
+
+    image_points = np.array(
+        image_points,
+        dtype=dtype
+    )
+
+    if image_points.ndim != 2 or image_points.shape[0] != 2:
+        msg = 'Image points must have shape (2, N)'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(image_points)):
+        msg = 'Image points must contain only finite values'
+        raise ValueError(msg)
+
     x, y = self._normalize_image_points(image_points)
 
     if correct_distortion:
@@ -160,10 +173,29 @@ def _project_to_z(
            [100.]])
 
     """
+    self._check_parameters()
+
+    dtype = self.dtype
+
     directions = self._get_inverse_vector(
         image_points,
         correct_distortion=correct_distortion
     )
+
+    z = np.array(
+        z,
+        dtype=dtype
+    )
+    n_points = directions.shape[1]
+
+    if z.ndim > 1 or (z.ndim == 1 and z.size not in (1, n_points)):
+        msg = 'Z must be a scalar or a 1D array matching the image points'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(z)):
+        msg = 'Z must contain only finite values'
+        raise ValueError(msg)
+
     direction_x, direction_y, direction_z = directions
     center_x, center_y, center_z = self.translation
 
@@ -177,4 +209,4 @@ def _project_to_z(
         world_x,
         world_y,
         world_z
-    ], dtype=self.dtype)
+    ], dtype=dtype)

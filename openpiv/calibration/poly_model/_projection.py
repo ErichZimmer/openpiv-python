@@ -65,7 +65,18 @@ def _project_points(
 
     dtype = self.dtype
 
-    object_points = np.array(object_points, dtype=dtype)
+    object_points = np.array(
+        object_points,
+        dtype=dtype
+    )
+
+    if object_points.ndim != 2 or object_points.shape[0] != 3:
+        msg = 'Object points must have shape (3, N)'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(object_points)):
+        msg = 'Object points must contain only finite values'
+        raise ValueError(msg)
 
     X = object_points[0]
     Y = object_points[1]
@@ -94,7 +105,7 @@ def _project_points(
 def _project_to_z(
     self,
     image_points: np.ndarray,
-    z: float
+    z: float | np.ndarray
 ):
     """Project image points to world points.
 
@@ -166,21 +177,25 @@ def _project_to_z(
 
     dtype = self.dtype
 
-    image_points = np.array(image_points, dtype=dtype)
+    t, r = self._get_inverse_vector(
+        image_points
+    )
 
-    x = image_points[0]
-    image_points[1]
+    z = np.array(
+        z,
+        dtype=dtype
+    )
+    n_points = r.shape[1]
 
-    if isinstance(z, np.ndarray):
-        Z = np.array(z, dtype=dtype)
-    elif isinstance(z, (float, int)):
-        Z = np.zeros_like(x) + z
-    else:
-        msg = 'Unsupported value entered for `z`. `z` must be either a scalar ' +\
-              'or numpy ndarray'
+    if z.ndim > 1 or (z.ndim == 1 and z.size not in (1, n_points)):
+        msg = 'Z must be a scalar or a 1D array matching the image points'
         raise ValueError(msg)
 
-    t, r = self._get_inverse_vector(image_points)
+    if not np.all(np.isfinite(z)):
+        msg = 'Z must contain only finite values'
+        raise ValueError(msg)
+
+    Z = np.zeros_like(t[0]) + z
     a = (Z - t[2]) / r[2]
 
     X = a*r[0] + t[0]
@@ -198,7 +213,21 @@ def _get_inverse_vector(
     Origins lie on Z=0. Directions are not normalized; their Z component
     is one. Coefficients use the raw image coordinates, as in project_points.
     """
-    image_points = np.array(image_points, dtype=self.dtype)
+    dtype = self.dtype
+
+    image_points = np.array(
+        image_points,
+        dtype=dtype
+    )
+
+    if image_points.ndim != 2 or image_points.shape[0] != 2:
+        msg = 'Image points must have shape (2, N)'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(image_points)):
+        msg = 'Image points must contain only finite values'
+        raise ValueError(msg)
+
     x = image_points[0]
     y = image_points[1]
 

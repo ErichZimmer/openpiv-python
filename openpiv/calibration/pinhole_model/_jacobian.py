@@ -12,15 +12,26 @@ def _evaluate_projection(
 ):
     self._check_parameters()
 
-    points = np.asarray(object_points, dtype=np.float64)
-    points = points.reshape(3, -1)
-    n_points = points.shape[1]
+    object_points = np.asarray(
+        object_points,
+        dtype=np.float64
+    )
+
+    if object_points.ndim != 2 or object_points.shape[0] != 3:
+        msg = 'Object points must have shape (3, N)'
+        raise ValueError(msg)
+
+    if not np.all(np.isfinite(object_points)):
+        msg = 'Object points must contain only finite values'
+        raise ValueError(msg)
+
+    n_points = object_points.shape[1]
 
     rotation, rotation_derivatives = _rotation(self.orientation)
     self.rotation = rotation.astype(self.dtype)
 
     camera_center = np.asarray(self.translation).reshape(3, 1)
-    centered_points = points - camera_center
+    centered_points = object_points - camera_center
     camera_points = rotation.T @ centered_points
 
     depth = camera_points[2]
