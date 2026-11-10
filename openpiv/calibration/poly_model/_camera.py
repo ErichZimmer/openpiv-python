@@ -19,6 +19,14 @@ class camera:
     order polynomial along the z-axis. The polynomial camera models also has
     ray-based estimator for 3D point triangulation.
 
+    .. rubric:: Methods
+
+    * :meth:`minimize_params` - Fit camera parameters to calibration points.
+    * :meth:`project_points` - Project world points to image coordinates.
+    * :meth:`project_to_z` - Project image points to a world Z plane.
+    * :meth:`save_parameters` - Save camera parameters to a file.
+    * :meth:`load_parameters` - Load camera parameters from a file.
+
     Attributes
     ----------
     cam_name : str
@@ -34,15 +42,16 @@ class camera:
     dtype : np.dtype
         The dtype used in the projections.
 
-    Methods
-    -------
-    minimize_params
-    project_points
-    project_to_z
-    save_parameters
-    load_parameters
-
     """
+    # method definitions
+    _check_parameters   = _check_parameters
+    minimize_params     = _minimize_params
+    project_points      = _project_points
+    project_to_z        = _project_to_z
+    _get_inverse_vector = _get_inverse_vector
+    save_parameters     = _save_parameters
+    load_parameters     = _load_parameters
+
     def __init__(
         self,
         name: str,
@@ -58,15 +67,6 @@ class camera:
         self.poly_wi = np.array(poly_wi, dtype=self.dtype, copy=True)
         self.poly_iw_o = np.array(poly_iw_o, dtype=self.dtype, copy=True)
         self.poly_iw_v = np.array(poly_iw_v, dtype=self.dtype, copy=True)
-
-        # method definitions
-        camera._check_parameters   = _check_parameters
-        camera.minimize_params     = _minimize_params
-        camera.project_points      = _project_points
-        camera.project_to_z        = _project_to_z
-        camera._get_inverse_vector = _get_inverse_vector
-        camera.save_parameters     = _save_parameters
-        camera.load_parameters     = _load_parameters
 
         # check camera params at init
         self._check_parameters()

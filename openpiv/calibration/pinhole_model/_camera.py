@@ -23,6 +23,22 @@ __all__ = [
 class camera:
     """A pinhole camera with Brown distortion and optional sensor tilt.
 
+    .. rubric:: Methods
+
+    * :meth:`minimize_params` - Fit camera parameters to calibration points.
+    * :meth:`project_points` - Project world points to image coordinates.
+    * :meth:`project_jacobian` - Project points and return analytic derivatives.
+    * :meth:`project_to_z` - Project image points to a world Z plane.
+    * :meth:`save_parameters` - Save camera parameters to a file.
+    * :meth:`load_parameters` - Load camera parameters from a file.
+
+    .. rubric:: Properties
+
+    * :attr:`distortion_model` - ``'reduced'`` uses k1, k2, p1, p2.
+      ``'full'`` also uses k3 and k4. Can be set directly after construction.
+    * :attr:`tilt` - Enable the two sensor-tilt angles with a boolean value.
+      Can be set directly after construction.
+
     Attributes
     ----------
     name : str
@@ -35,15 +51,10 @@ class camera:
         Euler angles in radians. The camera-to-world rotation is Rx Ry Rz.
     rotation : np.ndarray
         Camera-to-world rotation matrix, with shape (3, 3).
-    distortion_model : {'reduced', 'full'}
-        Reduced Brown uses k1, k2, p1, p2. Full also uses k3 and k4.
-        Can be set directly after construction.
     distortion1 : np.ndarray
         Eight coefficients: k1, k2, p1, p2, k3, k4, t1, t2. Here k4 is
         the radial denominator coefficient and t1, t2 are sensor-tilt
         angles in radians (tau_x, tau_y). Disabled coefficients are zero.
-    tilt : bool
-        Enable the two sensor-tilt angles. Can be set directly.
     refraction : {'none'}
         Refraction is not currently implemented.
     focal : tuple[float, float]
@@ -54,6 +65,20 @@ class camera:
         Projection dtype, either float32 or float64.
 
     """
+    _check_parameters = _check_parameters
+    _get_inverse_vector = _get_inverse_vector
+    _get_rotation_matrix = _get_rotation_matrix
+    _normalize_world_points = _normalize_world_points
+    _normalize_image_points = _normalize_image_points
+    _undistort_points_brown = _undistort_points_brown
+    _distort_points_brown = _distort_points_brown
+    minimize_params = _minimize_params
+    project_points = _project_points
+    project_jacobian = _project_jacobian
+    project_to_z = _project_to_z
+    save_parameters = _save_parameters
+    load_parameters = _load_parameters
+
     def __init__(
         self,
         name: str,
@@ -79,20 +104,6 @@ class camera:
         self.refraction = refraction
         self.focal = np.array(focal, dtype=dtype)
         self.principal = np.array([0, 0] if principal is None else principal, dtype=dtype)
-
-        camera._check_parameters = _check_parameters
-        camera._get_inverse_vector = _get_inverse_vector
-        camera._get_rotation_matrix = _get_rotation_matrix
-        camera._normalize_world_points = _normalize_world_points
-        camera._normalize_image_points = _normalize_image_points
-        camera._undistort_points_brown = _undistort_points_brown
-        camera._distort_points_brown = _distort_points_brown
-        camera.minimize_params = _minimize_params
-        camera.project_points = _project_points
-        camera.project_jacobian = _project_jacobian
-        camera.project_to_z = _project_to_z
-        camera.save_parameters = _save_parameters
-        camera.load_parameters = _load_parameters
 
         self._check_parameters()
         if principal is None:
