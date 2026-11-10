@@ -1,6 +1,7 @@
 import numpy as np
 
 from .. import _cal_doc_utils
+from .._target_grids import get_simple_grid
 from ._match_points import find_median_point, find_nearest_points
 
 __all__ = [
@@ -803,7 +804,8 @@ def get_pairs_auto(
     set_x_long: bool=True,
     tolerance: float=0.25,
     max_missing: int=2,
-    return_indices: bool=False
+    return_indices: bool=False,
+    flag_nans: bool=False
 ):
     """Match a symmetric board using its known shape and a centered origin.
 
@@ -845,6 +847,10 @@ def get_pairs_auto(
     return_indices : bool, optional
         Also return matched column indices in the original image_points
         array. Default is False.
+    flag_nans : bool, optional
+        Return all board positions, with missing image points set to NaN.
+        Missing indices are set to -1 when return_indices is True.
+        Object coordinates remain finite. Default is False.
 
     Returns
     -------
@@ -860,6 +866,13 @@ def get_pairs_auto(
         If either march does not recover the requested board shape, an
         automatically selected origin or axis marker is missing, or the
         marching function cannot establish the grid.
+
+    Notes
+    -----
+    When flag_nans is True, output columns follow the full board grid,
+    ordered left to right and top to bottom. Both marches must recover
+    the requested board shape, and required origin and axis markers must
+    still be found.
 
     """
     detected_points = np.asarray(image_points, dtype=np.float64)
@@ -963,7 +976,10 @@ def get_pairs_auto(
         return_indices=return_indices
     )
 
-    spacing = np.broadcast_to(np.asarray(spacing, dtype=np.float64), (2,))
+    spacing = np.broadcast_to(
+        np.asarray(spacing, dtype=np.float64),
+        (2,)
+    )
     grid = np.rint(result[1][:2] / spacing[:, None]).astype(int)
     shape = np.ptp(grid, axis=1) + 1
 
@@ -974,4 +990,41 @@ def get_pairs_auto(
         )
         raise ValueError(msg)
 
-    return result
+    if not flag_nans:
+        return result
+
+    nx, ny = shape
+    xmin = grid[0].min()
+    ymax = grid[1].max()
+
+    columns = grid[0] - xmin
+    rows = ymax - grid[1]
+    slots = rows * nx + columns
+
+    paired = np.full(
+        (2, nx * ny),
+        np.nan,
+        dtype=np.float64
+    )
+    paired[:, slots] = result[0]
+
+    objects = get_simple_grid(
+        nx,
+        ny,
+        0,
+        -xmin,
+        ymax
+    )
+    objects[:2] *= spacing[:, np.newaxis]
+
+    if return_indices:
+        indices = np.full(
+            nx * ny,
+            -1,
+            dtype=int
+        )
+        indices[slots] = result[2]
+
+        return paired, objects, indices
+
+    return paired, objects
