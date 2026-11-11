@@ -10,7 +10,7 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name="OpenPIV",
-    version='0.25.3',
+    version='0.26.0',
     packages=find_packages(),
     include_package_data=True,
     long_description=long_description,
@@ -19,14 +19,13 @@ setup(
         'setuptools',
     ],
     install_requires=[
-        'numpy>=1.21.6',
-        'imageio>=2.22.4',
-        'matplotlib>=3',
-        'scikit-image',
-        'scipy',
-        'natsort',
-        'tqdm',
-        'importlib_resources'
+        'numpy>=2.0.0',
+        'imageio>=2.35.0',
+        'matplotlib>=3.8.0',
+        'scikit-image>=0.23.0',
+        'scipy>=1.11.0',
+        'natsort>=8.4.0',
+        'tqdm>=4.66.0'
     ],
     extras_require={"tests": ["pytest"]},
     classifiers=[
@@ -37,10 +36,11 @@ setup(
         'Development Status :: 4 - Beta',
 
         # Sublist of all supported Python versions.
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
+        'Programming Language :: Python :: 3.14',
 
         # Sublist of all supported platforms and environments.
         'Operating System :: MacOS :: MacOS X',

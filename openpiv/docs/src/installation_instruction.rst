@@ -19,51 +19,67 @@ The dependencies are:
 * `Python <http://python.org/>`_
 * `Scipy <http://numpy.scipy.org/>`_
 * `Numpy <http://www.scipy.org/>`_
-* `scikit-image <http://scikit-image.org/>`_
-
-On all platforms, the following Python distribution is recommended:
-
-* Anaconda <https://store.continuum.io/cshop/anaconda/>   
+* `scikit-image <http://scikit-image.org/>`_   
 
 
 Installation
 ============
 
-Use `conda` :: 
+Recommended: Use `uv` (fastest)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    conda install -c alexlib openpiv
+`uv <https://github.com/astral-sh/uv>`_ is a fast Python package installer and resolver written in Rust.
+It provides faster and more reliable package installation compared to traditional tools.
 
-Or use `pip` :: 
+To install OpenPIV with uv::
+
+    pip install uv
+    uv pip install openpiv
+
+Or use `pip` (standard)
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+::
 
     pip install openpiv
+
+.. warning::
+    **Conda packages are no longer actively maintained.** The conda-forge package may be outdated.
     
+    If you previously installed OpenPIV via conda, you can migrate to pip or uv::
+    
+        # Remove the conda package
+        conda remove openpiv
+        
+        # Install with pip or uv
+        pip install openpiv
+        # or
+        uv pip install openpiv
+    
+.. note::
+    **Precompiled Binary Wheels with Rust Acceleration**:
+    Standard installation via ``pip install openpiv`` or ``uv pip install openpiv`` automatically
+    downloads pre-compiled binary wheels with the multithreaded Rust acceleration engine enabled.
+    No Rust compiler or C++ build tools are required on user machines.
+
 Get OpenPIV source code!
 ========================
 
-At this moment the only way to get OpenPIV's source code is using git. 
-`Git <http://en.wikipedia.org/wiki/Git_%28software%29>`_ Git is a distributed revision control system and 
-our code is hosted at `GitHub <www.github.com>`_.
+To develop or build OpenPIV from source, clone the repository with git::
 
-Bleeding edge development version
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    git clone https://github.com/OpenPIV/openpiv-python.git
+    cd openpiv-python
 
-If you are interested in the source code you are welcome to browse out git repository
-stored at https://github.com/alexlib/openpiv-python. If you want to download the source code
-on your machine, for testing, you need to set up git on your computer. Please look at 
-http://help.github.com/ which provide extensive help for how to set up git.
+Building the Rust Acceleration Backend
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To follow the development of OpenPIV, clone our repository with the command::
+To compile the high-performance parallel Rust extension locally, you need the Rust toolchain (``cargo`` and ``rustc``) and `maturin <https://github.com/PyO3/maturin>`_::
 
-    git clone http://github.com/openpiv/openpiv-python.git
+    pip install maturin
+    maturin develop --release -m crates/openpiv_rust/Cargo.toml
+    pip install -e .
 
-and update from time to  time. You can also download a tarball containing everything.
-
-Then add the path where the OpenPIV source are to the PYTHONPATH environment variable, so 
-that OpenPIV module can be imported and used in your programs. Remeber to build the extension
-with :: 
-
-    python setup.py build_ext --inplace 
-    
+Once built, OpenPIV will automatically detect the compiled extension and enable accelerated execution.    
 
 Experience problems?
 ====================

@@ -6,8 +6,16 @@ import numpy.lib.stride_tricks
 import numpy as np
 from numpy import log
 from numpy import ma
-from numpy.fft import rfft2 as rfft2_, irfft2 as irfft2_, fftshift as fftshift_
+from scipy.fft import rfft2 as rfft2_, irfft2 as irfft2_
+from numpy.fft import fftshift as fftshift_
 from scipy.signal import convolve2d as conv_
+
+try:
+    import openpiv_rust
+    HAS_RUST = True
+except ImportError:
+    HAS_RUST = False
+
 
 
 __licence_ = """
@@ -184,6 +192,7 @@ def sliding_window_array(
     image: np.ndarray, 
     window_size: Tuple[int,int]=(64,64),
     overlap: Tuple[int,int]=(32,32),
+    backend: str="auto",
     )-> np.ndarray:
     '''
     This version does not use numpy as_strided and is much more memory efficient.
@@ -193,10 +202,28 @@ def sliding_window_array(
     with three dimension, of size (n_windows, window_size, window_size), in
     which each slice, (along the first axis) is an interrogation window. 
     '''
-    # if isinstance(window_size, int):
-    #     window_size = (window_size, window_size)
-    # if isinstance(overlap, int):
-    #     overlap = (overlap, overlap)
+    if isinstance(window_size, int):
+        window_size = (window_size, window_size)
+    if isinstance(overlap, int):
+        overlap = (overlap, overlap)
+
+    if backend == "rust":
+        if not HAS_RUST:
+            raise ImportError(
+                "openpiv_rust is not installed. Build with maturin to enable Rust acceleration."
+            )
+        if image.ndim == 2:
+            return openpiv_rust.sliding_window_array(
+                np.ascontiguousarray(image, dtype=np.float64),
+                (int(window_size[0]), int(window_size[1])),
+                (int(overlap[0]), int(overlap[1])),
+            )
+    elif backend == "auto" and HAS_RUST and image.ndim == 2:
+        return openpiv_rust.sliding_window_array(
+            np.ascontiguousarray(image, dtype=np.float64),
+            (int(window_size[0]), int(window_size[1])),
+            (int(overlap[0]), int(overlap[1])),
+        )
 
     x, y = get_rect_coordinates(image.shape, window_size, overlap, center_on_field = False)
     x = (x - window_size[1]//2).astype(int)
@@ -335,9 +362,11 @@ def find_all_first_peaks(corr):
     ind = corr.reshape(corr.shape[0], -1).argmax(-1)
     peaks = np.array(np.unravel_index(ind, corr.shape[-2:]))
     peaks = np.vstack((peaks[0], peaks[1])).T
-    index_list = [(i, v[0], v[1]) for i, v in enumerate(peaks)]
+    # Vectorized index list creation instead of list comprehension
+    n = peaks.shape[0]
+    index_list = np.column_stack((np.arange(n), peaks))
     peaks_max = np.nanmax(corr, axis = (-2, -1))
-    return np.array(index_list), np.array(peaks_max)
+    return index_list, peaks_max
 
 
 def find_all_second_peaks(corr, width = 2):
@@ -363,23 +392,24 @@ def find_all_second_peaks(corr, width = 2):
     ind = indexes[:, 0]
     x = indexes[:, 1]
     y = indexes[:, 2]
-    iini = x - width
-    ifin = x + width + 1
-    jini = y - width
-    jfin = y + width + 1
-    iini[iini < 0] = 0 # border checking
-    ifin[ifin > corr.shape[1]] = corr.shape[1]
-    jini[jini < 0] = 0
-    jfin[jfin > corr.shape[2]] = corr.shape[2]
-    # create a masked view of the corr
-    tmp = corr.view(np.ma.MaskedArray)
+    iini = np.maximum(x - width, 0)
+    ifin = np.minimum(x + width + 1, corr.shape[1])
+    jini = np.maximum(y - width, 0)
+    jfin = np.minimum(y + width + 1, corr.shape[2])
+    
+    # Create a masked view of the corr - vectorized masking
+    tmp = corr.copy()  # Need copy to avoid modifying input
+    # Create mask for each window efficiently
     for i in ind:
-        tmp[i, iini[i]:ifin[i], jini[i]:jfin[i]] = np.ma.masked
+        tmp[i, iini[i]:ifin[i], jini[i]:jfin[i]] = np.nan
+    
+    # Convert to masked array where nans are masked
+    tmp = np.ma.masked_invalid(tmp)
     indexes, peaks = find_all_first_peaks(tmp)
     return indexes, peaks
 
 
-def find_subpixel_peak_position(corr, subpixel_method="gaussian"):
+def find_subpixel_peak_position(corr, subpixel_method="gaussian", backend="auto"):
     """
     Find subpixel approximation of the correlation peak.
 
@@ -420,6 +450,22 @@ def find_subpixel_peak_position(corr, subpixel_method="gaussian"):
     # check inputs
     if subpixel_method not in ("gaussian", "centroid", "parabolic"):
         raise ValueError(f"Method not implemented {subpixel_method}")
+
+    if backend == "rust":
+        if not HAS_RUST:
+            raise ImportError(
+                "openpiv_rust is not installed. Build with maturin to enable Rust acceleration."
+            )
+        if corr.ndim == 2:
+            return openpiv_rust.find_subpixel_peak_position(
+                np.ascontiguousarray(corr, dtype=np.float64),
+                subpixel_method=subpixel_method,
+            )
+    elif backend == "auto" and HAS_RUST and corr.ndim == 2:
+        return openpiv_rust.find_subpixel_peak_position(
+            np.ascontiguousarray(corr, dtype=np.float64),
+            subpixel_method=subpixel_method,
+        )
 
     # the peak locations
     (peak1_i, peak1_j), _ = find_first_peak(corr)
@@ -480,7 +526,8 @@ def find_subpixel_peak_position(corr, subpixel_method="gaussian"):
 def sig2noise_ratio(
     correlation: np.ndarray,
     sig2noise_method: str="peak2peak",
-    width: int=2
+    width: int=2,
+    backend: str="auto",
     )-> np.ndarray:
     """
     Computes the signal to noise ratio from the correlation map.
@@ -510,6 +557,24 @@ def sig2noise_ratio(
         the signal to noise ratios from the correlation maps.
 
     """
+    if backend == "rust":
+        if not HAS_RUST:
+            raise ImportError(
+                "openpiv_rust is not installed. Build with maturin to enable Rust acceleration."
+            )
+        if correlation.ndim == 3 and sig2noise_method in ("peak2peak", "peak2mean"):
+            return openpiv_rust.sig2noise_ratio(
+                np.ascontiguousarray(correlation, dtype=np.float64),
+                sig2noise_method=sig2noise_method,
+                width=int(width),
+            )
+    elif backend == "auto" and HAS_RUST and correlation.ndim == 3 and sig2noise_method in ("peak2peak", "peak2mean"):
+        return openpiv_rust.sig2noise_ratio(
+            np.ascontiguousarray(correlation, dtype=np.float64),
+            sig2noise_method=sig2noise_method,
+            width=int(width),
+        )
+
     sig2noise = np.zeros(correlation.shape[0])
     corr_max1 = np.zeros(correlation.shape[0])
     corr_max2 = np.zeros(correlation.shape[0])
@@ -643,7 +708,7 @@ def vectorized_sig2noise_ratio(correlation,
             out=np.zeros_like(peaks1),
             where=(peaks2 > 0.0)
         )
-        peak2peak[flag is True] = 0 # replace invalid values
+        peak2peak[flag] = 0  # replace invalid values
         return peak2peak
     
     elif sig2noise_method == "peak2mean":
@@ -664,7 +729,7 @@ def vectorized_sig2noise_ratio(correlation,
             out=np.zeros_like(peaks1max),
             where=(peaks2mean > 0.0)
         )
-        peak2mean[flag is True] = 0 # replace invalid values
+        peak2mean[flag] = 0  # replace invalid values
         return peak2mean
     else:
         raise ValueError(f"sig2noise_method not supported: {sig2noise_method}")
@@ -675,10 +740,12 @@ def fft_correlate_images(
     image_b: np.ndarray,
     correlation_method: str="circular",
     normalized_correlation: bool=True,
+    backend: str="scipy",
     conj: Callable=np.conj,
     rfft2 = rfft2_,
     irfft2 = irfft2_,
     fftshift = fftshift_,
+    workers: Optional[int] = None,
     )->np.ndarray:
     """ FFT based cross correlation
     of two images with multiple views of np.stride_tricks()
@@ -694,32 +761,51 @@ def fft_correlate_images(
 
     correlation_method : string
         one of the three methods implemented: 'circular' or 'linear'
-        [default: 'circular].
+        [default: 'circular'].
 
     normalized_correlation : string
-        decides wetehr normalized correlation is done or not: True or False
+        decides whether normalized correlation is done or not: True or False
         [default: True].
+
+    backend : string
+        'scipy' (default) or 'rust' (multithreaded 2D RealFFT via openpiv_rust)
     
-    conj : function
-        function used for complex conjugate
-    
-    rfft2 : function
-        function used for rfft2
-    
-    irfft2 : function
-        function used for irfft2
-    
-    fftshift : function
-        function used for fftshift
-        
+    workers : int, optional
+        number of worker threads for scipy.fft (default: None for single thread,
+        pass -1 for all CPU cores)
     """
+    if backend == "rust" or correlation_method in ("circular_rust", "rust"):
+        if not HAS_RUST:
+            raise ImportError(
+                "openpiv_rust is not installed. Build with maturin to enable Rust acceleration."
+            )
+        if normalized_correlation:
+            image_a = normalize_intensity(image_a)
+            image_b = normalize_intensity(image_b)
+        if correlation_method == "linear":
+            corr = openpiv_rust.fft_correlate_linear(
+                np.ascontiguousarray(image_b, dtype=np.float64),
+                np.ascontiguousarray(image_a, dtype=np.float64),
+            )
+            s1 = image_a.shape[-2:]
+            out_h, out_w = corr.shape[-2:]
+            fslice = (
+                slice(0, corr.shape[0]),
+                slice((out_h - s1[0]) // 2, (out_h - s1[0]) // 2 + s1[0]),
+                slice((out_w - s1[1]) // 2, (out_w - s1[1]) // 2 + s1[1]),
+            )
+            corr = corr[fslice]
+            if normalized_correlation:
+                corr = corr / (corr.shape[-2] * corr.shape[-1])
+            return corr
+        return openpiv_rust.fft_correlate_circular(
+            np.ascontiguousarray(image_a, dtype=np.float64),
+            np.ascontiguousarray(image_b, dtype=np.float64),
+            normalized_correlation=normalized_correlation,
+        )
 
     if normalized_correlation:
-        # remove the effect of stronger laser or
-        # longer exposure for frame B
-        # image_a = match_histograms(image_a, image_b)
-
-        # remove mean background, normalize to 0..1 range
+        # remove mean, divide by standard deviation
         image_a = normalize_intensity(image_a)
         image_b = normalize_intensity(image_b)
 
@@ -727,32 +813,39 @@ def fft_correlate_images(
     s2 = np.array(image_b.shape[-2:])
 
     if correlation_method == "linear":
-        # have to be normalized, mainly because of zero padding
         size = s1 + s2 - 1
-        fsize = 2 ** np.ceil(np.log2(size)).astype(int) - 1
-        fslice = (slice(0, image_a.shape[0]),
-                  slice((fsize[0]-s1[0])//2, (fsize[0]+s1[0])//2),
-                  slice((fsize[1]-s1[1])//2, (fsize[1]+s1[1])//2))
-        f2a = conj(rfft2(image_a, fsize, axes=(-2, -1)))  # type: ignore
-        f2b = rfft2(image_b, fsize, axes=(-2, -1))  # type: ignore
-        corr = fftshift(irfft2(f2a * f2b).real, axes=(-2, -1))[fslice]
+        # Use exact power of 2 for optimal PocketFFT radix-2 SIMD execution:
+        fsize = 2 ** np.ceil(np.log2(size)).astype(int)
+        fslice = (
+            slice(0, image_a.shape[0]),
+            slice(fsize[0] // 2 - s1[0] // 2, fsize[0] // 2 - s1[0] // 2 + s1[0]),
+            slice(fsize[1] // 2 - s1[1] // 2, fsize[1] // 2 - s1[1] // 2 + s1[1]),
+        )
+        kwargs = {"workers": workers} if workers is not None else {}
+        f2a = conj(rfft2(image_a, fsize, axes=(-2, -1), **kwargs))  # type: ignore
+        f2b = rfft2(image_b, fsize, axes=(-2, -1), **kwargs)  # type: ignore
+        corr = fftshift(irfft2(f2a * f2b, axes=(-2, -1), **kwargs).real, axes=(-2, -1))[fslice]
     elif correlation_method == "circular":
-        f2a = conj(rfft2(image_a))
-        f2b = rfft2(image_b)
-        corr = fftshift(irfft2(f2a * f2b).real, axes=(-2, -1))
+        kwargs = {"workers": workers} if workers is not None else {}
+        f2a = conj(rfft2(image_a, axes=(-2, -1), **kwargs))
+        f2b = rfft2(image_b, axes=(-2, -1), **kwargs)
+        corr = fftshift(irfft2(f2a * f2b, axes=(-2, -1), **kwargs).real, axes=(-2, -1))
     else:
         print(f"correlation method {correlation_method } is not implemented")
 
     if normalized_correlation:
-        corr = corr/(s2[0]*s2[1])  # for extended search area
-        corr = np.clip(corr, 0, 1)
+        corr = corr/(corr.shape[-2]*corr.shape[-1])  # for extended search area
+        
     return corr
 
 
 def normalize_intensity(window):
     """Normalize interrogation window or strided image of many windows,
-       by removing the mean intensity value per window and clipping the
-       negative values to zero
+       by removing the mean intensity value per window and dividing by 
+       the standard deviation. Note: for small signals the standdeviation
+       might not be full converged. Also numpy docs recommend float64 for
+       better accuracy: 
+       https://numpy.org/doc/stable/reference/generated/numpy.std.html
 
     Parameters
     ----------
@@ -762,17 +855,20 @@ def normalize_intensity(window):
     Returns
     -------
     window :  2d np.ndarray
-        the interrogation window array, with mean value equal to zero and
-        intensity normalized to -1 +1 and clipped if some pixels are
-        extra low/high
+        the interrogation window array, with zero mean and variance 1
     """
-    window = window.astype(np.float32)
+    # Convert to float64 only if needed, otherwise work in-place
+    if window.dtype != np.float64:
+        window = window.astype(np.float64)
+    else:
+        window = window.copy()  # Still need a copy to avoid modifying input
+    
     window -= window.mean(axis=(-2, -1),
-                          keepdims=True, dtype=np.float32)
+                          keepdims=True, dtype=np.float64)
     tmp = window.std(axis=(-2, -1), keepdims=True)
     window = np.divide(window, tmp, out=np.zeros_like(window),
                        where=(tmp != 0))
-    return np.clip(window, 0, window.max())
+    return window
 
 
 def correlate_windows(window_a, window_b, correlation_method="fft",
@@ -817,9 +913,7 @@ def correlate_windows(window_a, window_b, correlation_method="fft",
     It leads to inconsistency of the output
     """
 
-    # first we remove the mean to normalize contrast and intensity
-    # the background level which is take as a mean of the image
-    # is subtracted
+    # remove mean, divide by standard deviation
     # import pdb; pdb.set_trace()
     window_a = normalize_intensity(window_a)
     window_b = normalize_intensity(window_b)
@@ -841,7 +935,7 @@ def correlate_windows(window_a, window_b, correlation_method="fft",
     else:
         print(f"correlation method {correlation_method } is not implemented")
 
-    return corr
+    return corr/(corr.shape[-2]*corr.shape[-1])
 
 
 def fft_correlate_windows(window_a, window_b,
@@ -911,6 +1005,7 @@ def extended_search_area_piv(
     width: int=2,
     normalized_correlation: bool=False,
     use_vectorized: bool=False,
+    backend: str="auto",
 ):
     """Standard PIV cross-correlation algorithm, with an option for
     extended area search that increased dynamic range. The search region
@@ -1031,12 +1126,15 @@ def extended_search_area_piv(
     if (window_size[1] > frame_a.shape[0]) or (window_size[0] > frame_a.shape[1]):
         raise ValueError("window size cannot be larger than the image")
 
+    if backend not in ("auto", "rust", "scipy", "python"):
+        raise ValueError(f"Unknown backend '{backend}'. Choose from 'auto', 'rust', or 'scipy'.")
+
     # get field shape
     n_rows, n_cols = get_field_shape(frame_a.shape, search_area_size, overlap)
 
     # We implement the new vectorized code
-    aa = sliding_window_array(frame_a, search_area_size, overlap)
-    bb = sliding_window_array(frame_b, search_area_size, overlap)
+    aa = sliding_window_array(frame_a, search_area_size, overlap, backend=backend)
+    bb = sliding_window_array(frame_b, search_area_size, overlap, backend=backend)
 
     # for the case of extended seearch, the window size is smaller than
     # the search_area_size. In order to keep it all vectorized the
@@ -1062,13 +1160,15 @@ def extended_search_area_piv(
 
     corr = fft_correlate_images(aa, bb,
                                 correlation_method=correlation_method,
-                                normalized_correlation=normalized_correlation)
+                                normalized_correlation=normalized_correlation,
+                                backend=backend)
     if use_vectorized is True:
         u, v = vectorized_correlation_to_displacements(corr, n_rows, n_cols,
                                            subpixel_method=subpixel_method)
     else:
         u, v = correlation_to_displacement(corr, n_rows, n_cols,
-                                           subpixel_method=subpixel_method)
+                                           subpixel_method=subpixel_method,
+                                           backend=backend)
 
     # return output depending if user wanted sig2noise information
     if sig2noise_method is not None:
@@ -1078,7 +1178,8 @@ def extended_search_area_piv(
             )
         else:
             sig2noise = sig2noise_ratio(
-                corr, sig2noise_method=sig2noise_method, width=width
+                corr, sig2noise_method=sig2noise_method, width=width,
+                backend=backend,
             )
     else:
         sig2noise = np.zeros_like(u)*np.nan
@@ -1089,7 +1190,8 @@ def extended_search_area_piv(
 
 
 def correlation_to_displacement(corr, n_rows, n_cols,
-                                subpixel_method="gaussian"):
+                                subpixel_method="gaussian",
+                                backend="auto"):
     """
     Correlation maps are converted to displacement for each interrogation
     window using the convention that the size of the correlation map
@@ -1101,6 +1203,29 @@ def correlation_to_displacement(corr, n_rows, n_cols,
         n_rows, n_cols : number of interrogation windows, output of the
             get_field_shape
     """
+    if subpixel_method not in ("gaussian", "centroid", "parabolic"):
+        raise ValueError(f"Method not implemented {subpixel_method}")
+
+    if backend == "rust":
+        if not HAS_RUST:
+            raise ImportError(
+                "openpiv_rust is not installed. Build with maturin to enable Rust acceleration."
+            )
+        if corr.ndim == 3 and corr.shape[0] == n_rows * n_cols:
+            return openpiv_rust.batch_correlation_to_displacement(
+                np.ascontiguousarray(corr, dtype=np.float64),
+                n_rows,
+                n_cols,
+                subpixel_method=subpixel_method,
+            )
+    elif backend == "auto" and HAS_RUST and corr.ndim == 3 and corr.shape[0] == n_rows * n_cols:
+        return openpiv_rust.batch_correlation_to_displacement(
+            np.ascontiguousarray(corr, dtype=np.float64),
+            n_rows,
+            n_cols,
+            subpixel_method=subpixel_method,
+        )
+
     # iterate through interrogation widows and search areas
     u = np.zeros((n_rows, n_cols))
     v = np.zeros((n_rows, n_cols))

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "OpenPIV"
-version = "0.25.3"
+version = "0.26.1"
 description = "OpenPIV consists in a Python and Cython modules for scripting and executing the analysis of a set of PIV image pairs. In addition, a Qt and Tk graphical user interfaces are in development, to ease the use for those users who don't have python skills."
 authors = ["Alex Liberzon"]
 license = "GPLv3"
@@ -10,12 +10,11 @@ classifiers = [
     "Development Status :: 4 - Beta",
 
     # Sublist of all supported Python versions.
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 
     # Sublist of all supported platforms and environments.
     "Operating System :: MacOS :: MacOS X",
@@ -32,17 +31,21 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = ">=3.10"
-numpy = ">=1.21.6"
-imageio = "^2.22.4"
-matplotlib = "^3"
-scikit-image=">=0.23"
-scipy = "^1.7.3"
-natsort = "^8.4.0"
-tqdm = "^4.66.1"
-importlib_resources = "5.12.0"
+numpy = ">=2.0.0"
+imageio = ">=2.35.0"
+matplotlib = ">=3.8.0"
+scikit-image = ">=0.23.0"
+scipy = ">=1.11.0"
+natsort = ">=8.4.0"
+tqdm = ">=4.66.0"
+openpiv-rust = { version = ">=0.1.0", optional = true }
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.extras]
+rust = ["openpiv-rust"]
+
+[tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
+maturin = "^1.5.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
